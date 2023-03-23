@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Untitled Goose Tool: m365_datadumper!
-This module has all the telemetry pulls for m365.
+"""Untitled Goose Tool: mde_datadumper!
+This module has all the telemetry pulls for MDE.
 """
 
 from datetime import datetime, timedelta
