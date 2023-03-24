@@ -47,6 +47,8 @@ For more guidance on how to use Untitled Goose Tool, please see: [Untitled Goose
 ### Prerequisites
 Python 3.7, 3.8, or 3.9 is required to run Untitled Goose Tool with Python.
 
+Firefox is required for authenticating with Untitled Goose Tool.
+
 It's also recommended to run Untitled Goose Tool within a virtual environment.
 
 #### Mac OSX
