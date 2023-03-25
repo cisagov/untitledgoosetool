@@ -78,7 +78,7 @@ def getargs(honk_parser) -> None:
                                 default=False)   
     honk_parser.add_argument('--m365',
                                 action='store_true',
-                                help='Set all of the m365 calls to true',
+                                help='Set all of the M365 calls to true',
                                 default=False)
     honk_parser.add_argument('--mde',
                                 action='store_true',

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """Untitled Goose Tool: MessageTrace!
-This module performs data collection of a message trace from a m365 environment.
+This module performs data collection of a message trace from a M365 environment.
 """
 
 import argparse

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """Untitled Goose Tool: m365_datadumper!
-This module has all the telemetry pulls for m365.
+This module has all the telemetry pulls for M365.
 """
 
 import asyncio
