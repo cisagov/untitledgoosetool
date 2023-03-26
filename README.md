@@ -73,7 +73,7 @@ python -m venv .venv
 ```
 
 ### Requirements
-The following AzureAD/m365 permissions are required to run Untitled Goose Tool, and provide it read-only access to the tenant.
+The following AzureAD/M365 permissions are required to run Untitled Goose Tool, and provide it read-only access to the tenant.
 
 A user account with the following permissions:
 
@@ -254,11 +254,11 @@ username=The username of your account. ex: AAD_upn@example.onmicrosoft.com
 password=The password of your account. ex: AAD_password
 tenant=The tenant ID of your AAD tenant.
 us_government=If you have a GCC High tenant, set this to True, otherwise set this to False.
-exo_us_government=If your m365 tenant is a government tenant, set this to True, otherwise set this to False.
+exo_us_government=If your M365 tenant is a government tenant, set this to True, otherwise set this to False.
 appid=The application ID of your service principal.
 clientsecret=The client secret of your service principal (not the secret ID).
-subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription id. For multiple ids, separate it with commas, no spaces.
-m365=If you have a m365 environment, set this to True, otherwise set this to False.
+subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces.
+m365=If you have a M365 environment, set this to True, otherwise set this to False.
 msgtrace=If you want to run message trace, set this to True, otherwise set this to False.
 
 [filters]
@@ -379,7 +379,7 @@ password=The password of your account. ex: AAD_password
 tenant=The tenant ID of your AAD tenant.
 appid=The application ID of your service principal.
 clientsecret=The client secret of your service principal (not the secret ID).
-subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription id. For multiple ids, separate it with commas, no spaces.
+subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces.
 d4iot_sensor_token=Enter your D4IoT sensor API token.
 d4iot_mgmt_token=Enter your D4IoT management console API token.
 d4iot_sensor_ip=Enter your D4IoT sensor IP.
@@ -506,7 +506,7 @@ optional arguments:
   --dry-run             Dry run (do not do any API calls)
   --azure               Set all of the azure calls to true
   --ad                  Set all of the Azure AD calls to true
-  --m365                Set all of the m365 calls to true
+  --m365                Set all of the M365 calls to true
   --mde                 Set all of the MDE calls to true
 ```
 

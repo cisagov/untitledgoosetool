@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """Untitled Goose Tool: Auth!
-This module handles authentication to an Azure AD, Azure, and m365 environment.
+This module handles authentication to an Azure AD, Azure, and M365 environment.
 """
 
 import adal
@@ -720,7 +720,7 @@ def check_token(config, auth_data: dict, logger, EXPIRY_THRESHOLD_SECONDS=300):
     logger.info("Checking auth token for expiry")
 
     if auth_data == {}:
-        logger.info("No MFA tokens (was m365 set to False?) detected, proceeding.")
+        logger.info("No MFA tokens (was M365 set to False?) detected, proceeding.")
     else:
         if not 'exp' in auth_data['id_token_claims']:
             logger.debug('No expireTime set in auth_data, returning')
