@@ -11,7 +11,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 end_29_days_ago = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
 today_date = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -22,8 +22,8 @@ class MDEDataDumper(DataDumper):
         super().__init__(f'{output_dir}{os.path.sep}mde', reports_dir, auth, app_auth, session, debug)
         self.failurefile = os.path.join(reports_dir, '_no_results.json')
         self.logger = setup_logger(__name__, debug)
-        self.us_government = config_get(config, 'auth', 'us_government', self.logger).lower()
-        self.exo_us_government = config_get(config, 'auth', 'exo_us_government', self.logger).lower()
+        self.us_government = config_get(config, 'config', 'us_government', self.logger).lower()
+        self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.call_object = [self.get_url(), self.app_auth, self.logger, self.output_dir, self.get_session()]
     
     def get_url(self):

@@ -18,10 +18,12 @@ import os
 import time
 import fnmatch
 import re
+import getpass
+import pyAesCrypt
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 warnings.simplefilter('ignore')
 
@@ -38,6 +40,8 @@ call_cnt = 0
 auth = None
 config = None
 
+encryption_pw = None
+
 def getargs(graze_parser) -> None:
     """Helper function to build arguments for argparse
 
@@ -49,12 +53,12 @@ def getargs(graze_parser) -> None:
     graze_parser.add_argument('-a',
                                '--authfile',
                                action='store',
-                               help='File to read credentials from obtained by goosey auth',
+                               help='File to store the authentication tokens and cookies (default: .ugt_auth)',
                                default='.ugt_auth')
     graze_parser.add_argument('-c',
                                '--config',
                                action='store',
-                               help='Path to config file',
+                               help='Path to config file (default: .conf)',
                                default='.conf')
     graze_parser.add_argument('-o',
                                '--output-dir',
@@ -64,7 +68,7 @@ def getargs(graze_parser) -> None:
     graze_parser.add_argument('-d',
                                '--debug',
                                action='store_true',
-                               help='Debug output',
+                               help='Enable debug logging',
                                default=False)
     graze_parser.add_argument('-e',
                                '--endpoint',
@@ -151,6 +155,8 @@ def check(start, end):
         return False, -1
     else:
         logger.debug(f'\t[-] Did not get 200 code returned: {response.status_code}')
+        logger.debug(str(response.text))
+        logger.debug("Please re-auth if it is an authentication or login time-out error code.")
         sys.exit(1)
 
     return False, 0
@@ -225,7 +231,7 @@ def find_bounds(start, end, output=None):
     return bounds
       
 def main(args=None) -> None:
-    global logger, auth, url, config
+    global logger, auth, url, config, encryption_pw
 
     parser = argparse.ArgumentParser(add_help=True, description='Goosey', formatter_class=argparse.RawDescriptionHelpFormatter)
     
@@ -235,16 +241,31 @@ def main(args=None) -> None:
         args = parser.parse_args()
 
     logger = setup_logger(__name__, args.debug)
-
-    if not os.path.isfile(args.authfile):
-        logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
-        sys.exit(1)
-    
+  
     config = configparser.ConfigParser()
     config.read(args.config)
 
     auth = {}
-    exo_us_government = config_get(config, 'auth', 'exo_us_government', logger).lower()
+
+    exo_us_government = config_get(config, 'config', 'exo_us_government', logger).lower()
+
+    encrypted_ugtauth = False
+
+    dir_path = os.path.dirname(os.path.realpath(args.authfile))
+    encrypted_authfile = os.path.join(dir_path, '.ugt_auth.aes')
+
+    if os.path.isfile(encrypted_authfile):
+        encrypted_ugtauth = True
+        if encryption_pw is None:
+            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+
+        pyAesCrypt.decryptFile(encrypted_authfile, args.authfile, encryption_pw)
+        os.remove(encrypted_authfile)
+        logger.debug("Decrypted the .ugt_auth file!")
+
+    if not os.path.isfile(args.authfile):
+        logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
+        sys.exit(1)
 
     try:
         logger.info("Reading in authfile: {}".format(args.authfile))
@@ -257,6 +278,12 @@ def main(args=None) -> None:
         logger.error("{}".format(str(e)))
         raise e
         sys.exit(1)
+
+    if encrypted_ugtauth:
+        if os.path.isfile(args.authfile):
+            pyAesCrypt.encryptFile(args.authfile, encrypted_authfile, encryption_pw)
+            os.remove(args.authfile)
+            logger.debug("Encrypted the .ugt_auth file!")    
 
     url = args.endpoint
 

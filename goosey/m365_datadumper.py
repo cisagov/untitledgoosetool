@@ -17,19 +17,20 @@ import urllib.parse
 
 from aiohttp.client_exceptions import *
 from datetime import datetime, timedelta
+from goosey.auth import check_app_auth_token
 from goosey.datadumper import DataDumper
 from goosey.utils import *
 from io import StringIO
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 class M365DataDumper(DataDumper):
 
     def __init__(self, output_dir, reports_dir, auth, app_auth, session, config, debug):
         super().__init__(f'{output_dir}{os.path.sep}m365', reports_dir, auth, app_auth, session, debug)
         self.logger = setup_logger(__name__, debug)    
-        self.exo_us_government = config_get(config, 'auth', 'exo_us_government', self.logger).lower()
+        self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.inboxfailfile = os.path.join(reports_dir, '_user_inbox_503.json')
         filters = config_get(config, 'filters', '', logger=self.logger)
         if filters != '' and  filters is not None:
@@ -63,6 +64,7 @@ class M365DataDumper(DataDumper):
 
         headers = {
             'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
+            'validationkey': self.auth['validationkey'],
             'Content-Type': 'application/json;charset=UTF-8'
         }
 
@@ -71,7 +73,12 @@ class M365DataDumper(DataDumper):
             result = await r.json()
 
             if 'value' not in result:
-                self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
+                if result['error']['message'] == 'Request validation failed with validation key':
+                    self.logger.error("Error with validation key: " + result['error']['message'])
+                    self.logger.error("Please re-auth.")
+                    sys.exit(1)    
+                else:
+                    self.logger.debug("Error with result: {}".format(str(result)))
                 return
 
             outfile = os.path.join(self.output_dir, "EXO_RoleGroups.json")
@@ -91,6 +98,7 @@ class M365DataDumper(DataDumper):
 
         headers = {
             'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
+            'validationkey': self.auth['validationkey'],
             'Content-Type': 'application/json;charset=UTF-8'
         }
 
@@ -107,7 +115,12 @@ class M365DataDumper(DataDumper):
                 result = await r.json()
                 finalvalue = result['value']
                 if 'value' not in result:
-                    self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
+                    if result['error']['message'] == 'Request validation failed with validation key':
+                        self.logger.error("Error with validation key: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        sys.exit(1)    
+                    else:
+                        self.logger.debug("Error with result: {}".format(str(result)))
                     return
 
                 outfile = os.path.join(self.output_dir, "EXO_RoleGroupMembers.json")
@@ -137,6 +150,7 @@ class M365DataDumper(DataDumper):
             url = 'https://admin.exchange.office365.us/beta/Recipient'
         headers = {
             'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
+            'validationkey': self.auth['validationkey'],
             'Content-Type': 'application/json;charset=UTF-8'
         }
 
@@ -146,7 +160,12 @@ class M365DataDumper(DataDumper):
             result = await r.json()
 
             if 'value' not in result:
-                self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
+                if result['error']['message'] == 'Request validation failed with validation key':
+                    self.logger.error("Error with validation key: " + result['error']['message'])
+                    self.logger.error("Please re-auth.")
+                    sys.exit(1)    
+                else:
+                    self.logger.debug("Error with result: {}".format(str(result)))
                 return
 
             outfile = os.path.join(self.output_dir, "EXO_Mailboxes.json")
@@ -165,6 +184,16 @@ class M365DataDumper(DataDumper):
 
                         async with self.ahsession.get(nexturl, headers=headers, timeout=600) as r2:
                             result2 = await r2.json()
+
+                            if 'value' not in result2:
+                                if result2['error']['message'] == 'Request validation failed with validation key':
+                                    self.logger.error("Error with validation key: " + result2['error']['message'])
+                                    self.logger.error("Please re-auth.")
+                                    sys.exit(1)    
+                                else:
+                                    self.logger.debug("Error with result: {}".format(str(result2)))
+                                return
+
                             self.logger.debug('Received nextLink %s' % (skiptoken))
                             f.write("\n".join([json.dumps(x) for x in result2['value']]) + '\n')
                             f.flush()
@@ -196,6 +225,7 @@ class M365DataDumper(DataDumper):
 
         headers = {
             'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
+            'validationkey': self.auth['validationkey'],
             'Content-Type': 'application/json;charset=UTF-8'
         }
 
@@ -210,6 +240,7 @@ class M365DataDumper(DataDumper):
 
             async with self.ahsession.request("GET", url, headers=headers) as r:
                 result = await r.json()
+
                 finalvalue = result['ClientAccessSettings']
                 if 'ClientAccessSettings' not in result:
                     self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
@@ -261,7 +292,7 @@ class M365DataDumper(DataDumper):
 
             async with self.ahsession.request("GET", url, headers=headers) as r:
                 result = await r.json()
-                
+
                 if not result:
                     self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
                     return
@@ -282,10 +313,13 @@ class M365DataDumper(DataDumper):
         :return: None
         :rtype: None
         """
+
         if 'msExchEcpCanary' not in self.auth:
             self.logger.error("Missing msExchEcpCanary auth cookie. Did you auth correctly? (Skipping dump_exo_addins)")
             return
+
         self.logger.info("Gathering Exchange Online Add-ins...")
+
         if self.exo_us_government == 'false':
             url = 'https://outlook.office365.com/ecp/DDI/DDIService.svc/GetList?schema=OrgClientExtension&msExchEcpCanary=' + self.auth['msExchEcpCanary']
         elif self.exo_us_government == 'true':
@@ -315,6 +349,9 @@ class M365DataDumper(DataDumper):
 
         if 'token_type' not in self.app_auth or 'access_token' not in self.app_auth:
             self.logger.error("Missing token_type and access_token from auth. Did you auth correctly? (Skipping dump_exo_inboxrules)")
+            return
+
+        if check_app_auth_token(self.app_auth, self.logger):
             return
 
         outfile = os.path.join(self.output_dir, 'users.json')
@@ -480,7 +517,7 @@ class M365DataDumper(DataDumper):
                     done = False
         except ClientPayloadError as e:
             self.logger.error("Dumping UAL encountered an error with time bounds: {}".format(str(e)))
-            self.logger.error("Please change the date of the time bounds or save state to a date withim the last 364 days.")
+            self.logger.error("Please change the date of the time bounds or save state to a date within the last 364 days.")
             exit(1)
         except KeyError as e:
             self.logger.error("Dumping UAL encountered auth key error: {}".format(str(e)))
@@ -591,7 +628,7 @@ class M365DataDumper(DataDumper):
         file_directory = os.path.join(os.path.dirname(self.output_dir), '..', 'scripts')
         file_path = os.path.join(file_directory, "EXO.ps1")
         config_directory = os.path.join(os.path.dirname(self.output_dir), '..', '.conf')
-        report_directory = os.path.join(os.path.dirname(main_directory), 'untitled-goose-tool', self.reports_dir)
+        report_directory = main_directory + os.path.sep + self.reports_dir
 
         if sys.platform == 'win32':
-            subprocess.Popen(["powershell.exe", "-ExecutionPolicy", "Unrestricted", "-File", file_path, "-ExportDir", self.output_dir, "-ConfigFile", config_directory, "-ReportDir", report_directory], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            subprocess.Popen(["powershell.exe", "-ExecutionPolicy", "Unrestricted", "-File", file_path, "-ExportDir", self.output_dir, "-ReportDir", report_directory], creationflags=subprocess.CREATE_NEW_CONSOLE)

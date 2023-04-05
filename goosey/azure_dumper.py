@@ -7,6 +7,7 @@ This module has all the telemetry pulls for Azure resources.
 
 import asyncio
 from http.client import CONTINUE
+import getpass
 import json
 import os
 from tabnanny import check
@@ -30,17 +31,27 @@ from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 class AzureDataDumper(DataDumper):
 
-    def __init__(self, output_dir, reports_dir, session, app_auth, config, debug):
+    def __init__(self, output_dir, reports_dir, session, app_auth, config, auth_un_pw, debug):
         super().__init__(f'{output_dir}{os.path.sep}azure', reports_dir, None, app_auth, session, debug)
-        self.logger = setup_logger(__name__, debug)   
-        self.client_secret = config['auth']['clientsecret']
-        self.app_id = config['auth']['appid']
-        self.tenant = config['auth']['tenant']
-        self.us_gov = config['auth']['us_government']
+        self.logger = setup_logger(__name__, debug)
+        if auth_un_pw is not None:
+            if auth_un_pw['auth']['appid']:
+                self.app_id = auth_un_pw['auth']['appid']
+            else:
+                self.app_id = input("Please type your application client id: ")
+            if auth_un_pw['auth']['clientsecret']: 
+                self.client_secret = auth_un_pw['auth']['clientsecret']
+            else:
+                self.client_secret = getpass.getpass("Please type your client secret: ")
+        else:
+             self.app_id = input("Please type your application client id: ")
+             self.client_secret = getpass.getpass("Please type your client secret: ")
+        self.tenant = config['config']['tenant']
+        self.us_gov = config['config']['us_government']
         if self.us_gov.lower() == "true":
             self.authority = AzureAuthorityHosts.AZURE_GOVERNMENT
         else:
@@ -54,7 +65,7 @@ class AzureDataDumper(DataDumper):
        
         self.credential = ClientSecretCredential(tenant_id=self.tenant, client_id=self.app_id, client_secret=self.client_secret, authority=self.authority, logging_enable=True)
         
-        if config['auth']['subscriptionid'].lower() == "all":
+        if config['config']['subscriptionid'].lower() == "all":
             if self.us_gov.lower() == "true":
                 self.subscription_client = SubscriptionClient(self.credential, base_url='https://management.usgovcloudapi.net', credential_scopes=['https://management.usgovcloudapi.net/.default'])
             else:
@@ -138,8 +149,14 @@ class AzureDataDumper(DataDumper):
                 if not result:
                     self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
                     return
-                for entry in result['value']:
-                    locations.append(entry['name'])
+                if 'value' in result:
+                    for entry in result['value']:
+                        locations.append(entry['name'])
+                elif 'error' in result:
+                    if result['error']['code'] == 'ExpiredAuthenticationToken':
+                        self.logger.error("Error with authentication token: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        sys.exit(1)  
 
             for location in locations:
                 device_grps = []
@@ -147,11 +164,17 @@ class AzureDataDumper(DataDumper):
 
                 async with self.ahsession.request('GET', devgrp_url, headers=header, ssl=False) as r:
                     result = await r.json()
-                    for entry in result['value']:
-                        device_grps.append(entry['name'])
-                    with open(devgrps_outfile, 'a+', encoding='utf-8') as f:
-                            for x in result['value']:
-                                f.write(json.dumps(x) + "\n")
+                    if 'value' in result:
+                        for entry in result['value']:
+                            device_grps.append(entry['name'])
+                        with open(devgrps_outfile, 'a+', encoding='utf-8') as f:
+                                for x in result['value']:
+                                    f.write(json.dumps(x) + "\n")
+                    elif 'error' in result:
+                        if result['error']['code'] == 'ExpiredAuthenticationToken':
+                            self.logger.error("Error with authentication token: " + result['error']['message'])
+                            self.logger.error("Please re-auth.")
+                            sys.exit(1)                      
 
                 alert_ids = []
                 for val in device_grps:
@@ -165,7 +188,12 @@ class AzureDataDumper(DataDumper):
                             print("here")
                         if 'value' in result:
                             for x in result['value']:
-                                alert_ids.append(x['id'])                         
+                                alert_ids.append(x['id'])
+                        elif 'error' in result:
+                            if result['error']['code'] == 'ExpiredAuthenticationToken':
+                                self.logger.error("Error with authentication token: " + result['error']['message'])
+                                self.logger.error("Please re-auth.")
+                                sys.exit(1)                           
 
 
             for id in alert_ids:
@@ -177,6 +205,10 @@ class AzureDataDumper(DataDumper):
                     if 'error' in result:
                         if result['error']['code'] == 'NotFound':
                             self.logger.debug("Resource not found. Proceeding")
+                        elif result['error']['code'] == 'ExpiredAuthenticationToken':
+                            self.logger.error("Error with authentication token: " + result['error']['message'])
+                            self.logger.error("Please re-auth.")
+                            sys.exit(1)
 
                     if 'status' in result:
                         if result['status'] == 'Done':
@@ -228,8 +260,14 @@ class AzureDataDumper(DataDumper):
 
             async with self.ahsession.request('GET', loc_url, headers=header, ssl=False) as r:
                 result = await r.json()
-                for entry in result['value']:
-                    locations.append(entry['name'])
+                if 'value' in result:
+                    for entry in result['value']:
+                        locations.append(entry['name'])
+                elif 'error' in result:
+                    if result['error']['code'] == 'ExpiredAuthenticationToken':
+                        self.logger.error("Error with authentication token: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        sys.exit(1)  
 
             for location in locations:
                 device_grps = []
@@ -237,11 +275,17 @@ class AzureDataDumper(DataDumper):
 
                 async with self.ahsession.request('GET', devgrp_url, headers=header, ssl=False) as r:
                     result = await r.json()
-                    for entry in result['value']:
-                        device_grps.append(entry['name'])
-                    with open(devgrps_outfile, 'a+', encoding='utf-8') as f:
-                            for x in result['value']:
-                                f.write(json.dumps(x) + "\n")
+                    if 'value' in result:
+                        for entry in result['value']:
+                            device_grps.append(entry['name'])
+                        with open(devgrps_outfile, 'a+', encoding='utf-8') as f:
+                                for x in result['value']:
+                                    f.write(json.dumps(x) + "\n")
+                    elif 'error' in result:
+                        if result['error']['code'] == 'ExpiredAuthenticationToken':
+                            self.logger.error("Error with authentication token: " + result['error']['message'])
+                            self.logger.error("Please re-auth.")
+                            sys.exit(1)      
 
                 for val in device_grps:
                     url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
@@ -256,7 +300,12 @@ class AzureDataDumper(DataDumper):
                                 for x in result['value']:
                                     f.write(json.dumps(x) + "\n")
                                 f.flush()
-                                os.fsync(f)                           
+                                os.fsync(f)
+                        elif 'error' in result:
+                            if result['error']['code'] == 'ExpiredAuthenticationToken':
+                                self.logger.error("Error with authentication token: " + result['error']['message'])
+                                self.logger.error("Please re-auth.")
+                                sys.exit(1)                           
                         await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)           
 
     async def dump_portal_defendersettings(self) -> None:
@@ -279,6 +328,11 @@ class AzureDataDumper(DataDumper):
                             f.write(json.dumps(x) + "\n")
                         f.flush()
                         os.fsync(f) 
+                elif 'error' in result:
+                    if result['error']['code'] == 'ExpiredAuthenticationToken':
+                        self.logger.error("Error with authentication token: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        sys.exit(1)
 
     async def dump_portal_sensors(self) -> None:
 
@@ -298,8 +352,14 @@ class AzureDataDumper(DataDumper):
 
             async with self.ahsession.request('GET', loc_url, headers=header, ssl=False) as r:
                 result = await r.json()
-                for entry in result['value']:
-                    locations.append(entry['name'])
+                if 'value' in result:
+                    for entry in result['value']:
+                        locations.append(entry['name'])
+                elif 'error' in result:
+                    if result['error']['code'] == 'ExpiredAuthenticationToken':
+                        self.logger.error("Error with authentication token: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        sys.exit(1)
 
             for location in locations:
                 sites = []
@@ -307,11 +367,17 @@ class AzureDataDumper(DataDumper):
 
                 async with self.ahsession.request('GET', sites_url, headers=header, ssl=False) as r:
                     result = await r.json()
-                    for entry in result['value']:
-                        sites.append(entry['name'])
-                    with open(sites_outfile, 'a+', encoding='utf-8') as f:
+                    if 'value' in result:
+                        for entry in result['value']:
+                            sites.append(entry['name'])
+                        with open(sites_outfile, 'a+', encoding='utf-8') as f:
                             for x in result['value']:
                                 f.write(json.dumps(x) + "\n")
+                    elif 'error' in result:
+                        if result['error']['code'] == 'ExpiredAuthenticationToken':
+                            self.logger.error("Error with authentication token: " + result['error']['message'])
+                            self.logger.error("Please re-auth.")
+                            sys.exit(1)
 
                 for val in sites:
                     url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites/" + val + "/sensors?api-version=2021-09-01-preview"
@@ -326,7 +392,12 @@ class AzureDataDumper(DataDumper):
                                 for x in result['value']:
                                     f.write(json.dumps(x) + "\n")
                                 f.flush()
-                                os.fsync(f)                           
+                                os.fsync(f)
+                        elif 'error' in result:
+                            if result['error']['code'] == 'ExpiredAuthenticationToken':
+                                self.logger.error("Error with authentication token: " + result['error']['message'])
+                                self.logger.error("Please re-auth.")
+                                sys.exit(1)                           
                         await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)  
    
     async def dump_diagnostic_settings(self) -> None:

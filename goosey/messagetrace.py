@@ -7,9 +7,11 @@ This module performs data collection of a message trace from a M365 environment.
 
 import argparse
 import configparser
+import getpass
 import json
 import os
 import pathlib
+import pyAesCrypt
 import requests
 import sys
 import time
@@ -27,23 +29,21 @@ MSGTRC_HELP = '''Untitled Goose Tool: Message Trace
 
 To get started, use one of the subcommands.
 
-1. Authenticate
-goosey messagetrace --auth
-
-2. Submit a message trace request
+1. Submit a message trace request
 goosey messagetrace --submit-report
 
-3. Check on a message trace request
+2. Check on a message trace request
 goosey messagetrace --status-check
 
-4a. Gather the completed report (requires user to be present for MFA check)
+3. Gather the completed report (requires user to be present for MFA check)
 goosey messagetrace --gather-report
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 logger = None
+encryption_pw = None
 
 class MessageTrace():
 
@@ -61,17 +61,9 @@ class MessageTrace():
         config = configparser.ConfigParser()
         config.read(configfile)
 
-        self.username = config_get(config, 'auth', 'username', self.logger)
-        self.password = config_get(config, 'auth', 'password', self.logger)
         self.setemailaddress = config_get(config, 'msgtrc', 'setemailaddress', self.logger)
         if config_get(config, 'msgtrc', 'direction', self.logger):
             self.direction = config_get(config, 'msgtrc', 'direction', self.logger)
-        if config_get(config, 'msgtrc', 'messageid', self.logger):
-            msgidlist = list()
-            msgidlist.append(config_get(config, 'msgtrc', 'messageid', self.logger))
-            self.messageid = msgidlist
-        else:
-            self.messageid = []
         if self.setemailaddress == 'True':
             self.logger.debug('setemailaddress is set to True')
             if config_get(config, 'msgtrc', 'notifyaddress', self.logger):
@@ -151,6 +143,16 @@ class MessageTrace():
 
         data = response.json()
         self.logger.debug(f'Response from server: {data}')
+
+        if 'error' in data:
+            if data['error']['message'] == 'User Auth Token Null in Context':
+                self.logger.error("Error with authentication token: " + data['error']['message'])
+                self.logger.error("Please re-auth.")
+                sys.exit(1)
+            elif data['error']['message'] == 'Request validation failed with validation key':
+                self.logger.error("Error with validation key: " + data['error']['message'])
+                self.logger.error("Please re-auth.")
+                sys.exit(1)    
         
         try:
             self.jobid = data['JobId']
@@ -185,6 +187,17 @@ class MessageTrace():
         }
         response = requests.request("GET", url, headers=headers)
         data = response.json()
+
+        if 'error' in data:
+            if data['error']['message'] == 'User Auth Token Null in Context':
+                self.logger.error("Error with authentication token: " + data['error']['message'])
+                self.logger.error("Please re-auth.")
+                sys.exit(1)
+            elif data['error']['message'] == 'Request validation failed with validation key':
+                self.logger.error("Error with validation key: " + data['error']['message'])
+                self.logger.error("Please re-auth.")
+                sys.exit(1)   
+
         responseValue = data["value"]
 
         msgrpt = search_results(responseValue, self.jobid)
@@ -213,6 +226,11 @@ class MessageTrace():
 
         self.parse_config(args.config)
 
+        self.username = input("Please type your username: ")
+        self.password = getpass.getpass("Please type your password: ")
+
+        self.logger.info('Attempting to automatically auth as an user. You may have to accept MFA prompts.')
+
         EMAILFIELD = (By.ID, "i0116")
         PASSWORDFIELD = (By.ID, "i0118")
         NEXTBUTTON = (By.ID, "idSIButton9")
@@ -232,7 +250,8 @@ class MessageTrace():
         ffprofile.set_preference("browser.download.dir", dldir)
         ffprofile.set_preference("browser.helperApps.neverAsk.saveToDisk", "text/plain, text/html, application/xhtml+xml, application/xml")
 
-        opts.add_argument("--headless")
+        if self.headless:
+            opts.add_argument("--headless")
 
         browser = webdriver.Firefox(firefox_profile=ffprofile,options=opts)
 
@@ -240,19 +259,49 @@ class MessageTrace():
             if browser:
                 browser.get("https://login.windows.net")
 
-                WebDriverWait(browser, 10).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
-                # Click Next
-                WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
-                # find password input field and insert password as well
-                WebDriverWait(browser, 10).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
-                # Click Login 
-                WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
+                
+                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+
+                try:
+                    WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'usernameError')))
+                    browser.quit()
+                    sys.exit("Incorrect username. Please correct it and try again.")  
+                except Exception as e:
+                    pass    
+
+                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
+                
+                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+                
+                try:
+                    WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
+                    browser.quit()
+                    sys.exit("Incorrect password. Please correct it and try again.")  
+                except Exception as e:
+                    pass    
+            
+                try:
+                    WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
+                    browser.quit()
+                    sys.exit("Password reset required. Change your password and try again.")
+                except Exception as e:
+                    pass
+
+                try:
+                    WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'idDiv_SAASDS_Title')))
+                    browser.quit()
+                    sys.exit("Declined MFA. Please correct it and try again.") 
+                except Exception as e:
+                    pass 
+
                 # Stay signed in
                 try:
                     WebDriverWait(browser, 20).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
                 except Exception as e:
                     pass
                 
+                self.logger.info("Authentication completed. Going to admin.protection.outlook.com.")
                 url = "https://admin.protection.outlook.com/ExtendedReport/Download?Type=OnDemandReport&RequestID=" + self.jobid
 
                 browser.get(url)
@@ -285,21 +334,21 @@ class MessageTrace():
 def getargs(msgtrace_parser) -> None:
     msgtrace_parser.add_argument('--debug',
                                 action='store_true',
-                                help='Debug output',
+                                help='Enable debug logging',
                                 default=False)
     msgtrace_parser.add_argument('-c',
                                 '--config',
                                 action='store',
-                                help='Path to config file',
+                                help='Path to config file (default: .conf)',
                                 default='.conf')
     msgtrace_parser.add_argument('-a',
                                 '--authfile',
                                 action='store',
-                                help='File to read credentials from obtained by goosey auth',
+                                help='File to store the authentication tokens and cookies (default: .ugt_auth)',
                                 default='.ugt_auth')
     msgtrace_parser.add_argument('--output-dir',
                                 action='store',
-                                help='Output directory for output files',
+                                help='Directory for storing the results (default: output)',
                                 default='output')                
     msgtrace_parser.add_argument('--submit-report',
                                 action='store_true',
@@ -319,7 +368,7 @@ def getargs(msgtrace_parser) -> None:
                                 default=False)
 
 def main(args=None) -> None:
-    global logger
+    global logger, encryption_pw
 
     parser = argparse.ArgumentParser(add_help=True, description=MSGTRC_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -329,19 +378,42 @@ def main(args=None) -> None:
         args = parser.parse_args()
 
     logger = setup_logger(__name__, args.debug)
+    
+    self.headless = not args.interactive
+    
+    auth = {}
+
+    encrypted_ugtauth = False
+
+    dir_path = os.path.dirname(os.path.realpath(args.authfile))
+    encrypted_authfile = os.path.join(dir_path, '.ugt_auth.aes')
+
+    if os.path.isfile(encrypted_authfile):
+        encrypted_ugtauth = True
+        if encryption_pw is None:
+            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+
+        pyAesCrypt.decryptFile(encrypted_authfile, args.authfile, encryption_pw)
+        os.remove(encrypted_authfile)
+        logger.info("Decrypted the .ugt_auth file!")
 
     if not os.path.isfile(args.authfile):
         logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
         sys.exit(1)
 
-    auth = {}
     try:
         logger.info("Reading in authfile: {}".format(args.authfile))
         with open(args.authfile, 'r') as infile:
             auth = json.loads(infile.read())['mfa']['https://graph.microsoft.com/.default']
     except Exception as e:
         logger.error("{}".format(str(e)))
-        raise e
+        raise e    
+
+    if encrypted_ugtauth:
+        if os.path.isfile(args.authfile):
+            pyAesCrypt.encryptFile(args.authfile, encrypted_authfile, encryption_pw)
+            os.remove(args.authfile)
+            logger.info("Encrypted the .ugt_auth file!")    
 
     check_output_dir(args.output_dir, logger)
     check_output_dir(f'{args.output_dir}{os.path.sep}msgtrc', logger)
@@ -352,8 +424,6 @@ def main(args=None) -> None:
         logger.info("Requesting message trace...")
         seconds = time.perf_counter()
         msgtrc.request_msgtrace(args)
-        if args.full:
-            msgtrc.check_status(args)
         elapsed = time.perf_counter() - seconds
         logger.info("Message trace request executed in {0:0.2f} seconds.".format(elapsed))
     elif args.status_check:

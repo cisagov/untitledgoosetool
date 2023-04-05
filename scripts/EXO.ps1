@@ -4,11 +4,7 @@
     [Parameter()]
     [string] $ExportDir,
     [Parameter()]
-    [string] $ConfigFile,
-    [Parameter()]
     [string] $UserId,
-    [Parameter()]
-    [string] $EXO_US_Gov,
     [Parameter()]
     [string] $ReportDir,    
     [Parameter()]
@@ -63,19 +59,6 @@ Function Get-EXOEnvironment {
     }
 
     Return ($ExchangeEnvironment)
-}
-
-Function Get-ConfInfo() {
-    [cmdletbinding()]Param(
-        [Parameter()]
-        [string] $ConfigFile
-    )
-
-    $StrArr = Get-Content $ConfigFile
-    $UserId = (($StrArr | select-string "username") -split "=" | Select-Object -skip 1).Trim()
-    $EXO_US_Gov = (($StrArr | select-string "exo_us_government") -split "=" | Select-Object -skip 1).Trim()
-
-    Return ($UserId, $EXO_US_Gov)
 }
 
 Function Get-EXORoleGrpInformation() {
@@ -495,26 +478,26 @@ If ($OSEnvironment -match "Unix") {
 Start-Transcript -OutputDirectory $ReportDir
 Import-PSModules -ExportDir $ExportDir -Verbose
 ($ExchangeEnvironment) = Get-EXOEnvironment -ExchangeEnvironment $ExchangeEnvironment
-($UserId, $EXO_US_Gov) = Get-ConfInfo -ConfigFile $ConfigFile
+$UserId = Read-Host "Please enter your username"
+
 
 If ($OSEnvironment -match "Win") {
-    If ($EXO_US_Gov -match "False") {
+    If ($ExchangeEnvironment -ne "O365USGovGCCHigh") {
         Write-Host "EXO environment is NOT US Government."
         Connect-ExchangeOnline -ExchangeEnvironmentName $ExchangeEnvironment
         Connect-IPPSSession -UserPrincipalName $UserId
-    } ElseIf ($EXO_US_Gov -match "True") {
+    } ElseIf ($ExchangeEnvironment -eq "O365USGovGCCHigh") {
         Write-Host "EXO environment is US Government"
         Connect-ExchangeOnline -ExchangeEnvironmentName $ExchangeEnvironment
         Connect-IPPSSession -UserPrincipalName $UserId -ConnectionUri https://ps.compliance.protection.office365.us/powershell-liveid/ -AzureADAuthorizationEndpointUri https://login.microsoftonline.us/common
     }
 
 } ElseIf ($OSEnvironment -match "Unix") {
-    If ($EXO_US_Gov -match "False") {
+    If ($ExchangeEnvironment -ne "O365USGovGCCHigh") {
         Write-Host "EXO environment is NOT US Government."
         Connect-ExchangeOnline -ExchangeEnvironmentName $ExchangeEnvironment -Device
         Connect-IPPSSession
-    }
-    ElseIf ($EXO_US_Gov -match "True") {
+    } ElseIf ($ExchangeEnvironment -eq "O365USGovGCCHigh") {
         Write-Host "EXO environment is US Government"
         Connect-ExchangeOnline -ExchangeEnvironmentName $ExchangeEnvironment
         Connect-IPPSSession -UserPrincipalName $UserId -ConnectionUri https://ps.compliance.protection.office365.us/powershell-liveid/ -AzureADAuthorizationEndpointUri https://login.microsoftonline.us/common

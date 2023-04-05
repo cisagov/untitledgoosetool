@@ -18,7 +18,7 @@ from tracemalloc import start
 from logging import handlers
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 if sys.platform == 'win32':
     import msvcrt
@@ -312,18 +312,26 @@ async def helper_single_object(object, params, failurefile=None, retries=5) -> N
             header = {'Authorization': '%s %s' % (auth['token_type'], auth['access_token'])}
             logger.info('Dumping %s information...' % (object))
             outfile = os.path.join(output_dir, name + '.json')
-            async with session.get(url, headers=header) as r:
+            async with session.get(url, headers=header, raise_for_status=True) as r:
                 result = await r.json()
                 nexturl = None
+
                 if 'value' not in result:
-                    if '@odata.context' not in result:
-                        logger.debug("Error with result. Please check your auth: {}".format(str(result)))
-                        return
-                    elif '@odata.context' in result:
+                    if '@odata.context' in result:
                         if '@odata.type' in result:
                             result['value'].pop('@odata.type')
                         with open(outfile, 'w', encoding='utf-8') as f:
                             f.write(json.dumps(result) + '\n')
+                    if 'error' in result:
+                        if result['error']['code'] == 'InvalidAuthenticationToken':
+                            return
+                        elif result['error']['code'] == 'Unauthorized':
+                            logger.error("Error with authentication token: " + result['error']['message'])
+                            logger.error("Please re-auth.")
+                            sys.exit(1)
+                    else:
+                        logger.debug("Error with result: {}".format(str(result)))
+                        return
                 if 'value' in result:
                     if result['value']:
                         with open(outfile, 'w', encoding='utf-8') as f:

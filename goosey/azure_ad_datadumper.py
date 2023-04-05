@@ -15,17 +15,16 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 class AzureAdDataDumper(DataDumper):
 
     def __init__(self, output_dir, reports_dir, auth, app_auth, session, config, debug):
         super().__init__(f'{output_dir}{os.path.sep}azuread', reports_dir, auth, app_auth, session, debug)
         self.logger = setup_logger(__name__, debug)
-        self.request_count = 0
         self.THRESHOLD = 300
-        self.us_government = config_get(config, 'auth', 'us_government', self.logger).lower()
-        self.exo_us_government = config_get(config, 'auth', 'exo_us_government', self.logger).lower()
+        self.us_government = config_get(config, 'config', 'us_government', self.logger).lower()
+        self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.failurefile = os.path.join(reports_dir, '_no_results.json')
         filters = config_get(config, 'filters', 'date_start', logger=self.logger)
         if  filters!= '' and filters is not None:
@@ -63,6 +62,9 @@ class AzureAdDataDumper(DataDumper):
         """
         if 'token_type' not in self.app_auth or 'access_token' not in self.app_auth:
             self.logger.error("Missing token_type and access_token from auth. Did you auth correctly? (Skipping _dump_signins)")
+            return
+
+        if check_app_auth_token(self.app_auth, self.logger):
             return
 
         signin_directory = os.path.join(self.output_dir, source)
@@ -130,6 +132,11 @@ class AzureAdDataDumper(DataDumper):
                                     f.write("\n")
                                 f.flush()
                                 os.fsync(f)
+                        if 'error' in result:
+                            if result['error']['code'] == 'InvalidAuthenticationToken':
+                                self.logger.error("Error with authentication token: " + result['error']['message'])
+                                self.logger.error("Please re-auth.")
+                                sys.exit(1)
 
                         await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)
                         with open(statefile, 'w') as f:
@@ -146,8 +153,8 @@ class AzureAdDataDumper(DataDumper):
                             retries -= 1
                             self.logger.debug('Retries remaining: {}'.format(str(retries)))
                         elif e.status == 401:
-                            self.logger.info('Unauthorized message received. Exiting calls.')
-                            raise
+                            self.logger.error('401 unauthorized message received. Exiting calls. Please re-auth.')
+                            sys.exit(1)
 
             if os.path.isfile(outfile) and os.stat(outfile).st_size == 0:
                 os.remove(outfile)     
@@ -172,7 +179,6 @@ class AzureAdDataDumper(DataDumper):
         
         sub_dir = os.path.join(self.output_dir, 'azure_audit_logs')
         check_output_dir(sub_dir, self.logger)
-
         
         if self.us_government == 'false':
             url = 'https://graph.microsoft.com/beta/auditLogs/directoryAudits'
@@ -211,22 +217,20 @@ class AzureAdDataDumper(DataDumper):
             end_date = '%sT00:00:00.000000Z' % (datetime.now().strftime("%Y-%m-%d"))
         while start < end_date:
             retries = 5
+            end_time = '%sT23:59:59.999999Z' % (datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date())            
+            outfile = os.path.join(sub_dir, 'azureadauditlog_' + str(datetime.strptime(end_time, ("%Y-%m-%dT%H:%M:%S.%fZ")).date()) + '.json')
+            filters = '(activityDateTime ge %s and activityDateTime lt %s)' % (start, end_time)
+
+            params = {
+                'api-version': 'beta',
+                '$orderby': 'activityDateTime',
+                '$filter': filters,
+            }
 
             for counter in range (retries):
                 try:
-                    end_time = '%sT23:59:59.999999Z' % (datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date())            
-                    outfile = os.path.join(sub_dir, 'azureadauditlog_' + str(datetime.strptime(end_time, ("%Y-%m-%dT%H:%M:%S.%fZ")).date()) + '.json')
-                    filters = '(activityDateTime ge %s and activityDateTime lt %s)' % (start, end_time)
-
-                    params = {
-                        'api-version': 'beta',
-                        '$orderby': 'activityDateTime',
-                        '$filter': filters,
-                    }
-
                     header = {'Authorization': '%s %s' % (self.app_auth['token_type'], self.app_auth['access_token'])}
-                    async with self.ahsession.get(url, headers=header, params=params, timeout=600) as r:
-                        self.request_count += 1
+                    async with self.ahsession.get(url, headers=header, params=params, raise_for_status=True, timeout=600) as r:
                         result = await r.json()
                         nexturl = None
                         if '@odata.nextLink' in result:
@@ -238,10 +242,15 @@ class AzureAdDataDumper(DataDumper):
                                     f.write("\n".join([json.dumps(x) for x in result['value']]) + '\n')
                             start = '%sT00:00:00.000000Z' % ((datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date() + timedelta(days=1)).strftime("%Y-%m-%d"))
                         if 'error' in result:
-                            self.logger.debug('Error in result: {}'.format(result['error']))
-                            self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
-                            await asyncio.sleep(60)
-                            retries -=1
+                            if result['error']['code'] == 'InvalidAuthenticationToken':
+                                self.logger.error("Error with authentication token: " + result['error']['message'])
+                                self.logger.error("Please re-auth.")
+                                sys.exit(1)
+                            else:
+                                self.logger.debug('Error in result: {}'.format(result['error']))
+                                self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
+                                await asyncio.sleep(60)
+                                retries -=1
                         
                         with open(statefile, 'w') as f:
                             f.write("time\n")
@@ -256,8 +265,9 @@ class AzureAdDataDumper(DataDumper):
                             await asyncio.sleep(60)
                             retries -= 1
                         elif e.status == 401:
-                            self.logger.info('Unauthorized message received. Exiting calls.')
-                            raise
+                            self.logger.info('401 unauthorized message received. Exiting calls. Please re-auth.')
+                            sys.exit(1)
+                            
 
         self.logger.info('Finished dumping AzureAD audit logs.')
 
@@ -275,10 +285,12 @@ class AzureAdDataDumper(DataDumper):
         
         if check_app_auth_token(self.app_auth, self.logger):
             return
+
         if self.us_government == 'false':
             url = 'https://graph.microsoft.com/beta/auditLogs/provisioning'
         elif self.us_government == 'true':
             url = 'https://graph.microsoft.us/beta/auditLogs/provisioning'
+            
         self.logger.info('Getting AzureAD provisioning logs...')
         outfile = os.path.join(self.output_dir, 'azureadprovisioninglogs.json')  
 
@@ -287,7 +299,7 @@ class AzureAdDataDumper(DataDumper):
             result = await r.json()
             if 'value' not in result:
                 self.logger.debug("Error with result: {}".format(str(result)))
-                return
+                sys.exit(1)
             with open(outfile, 'w', encoding='utf-8') as f:
                 nexturl = None
                 if '@odata.nextLink' in result:
@@ -320,8 +332,13 @@ class AzureAdDataDumper(DataDumper):
         async with self.ahsession.get(parent_url, headers=header) as r:
             result = await r.json()
             if 'value' not in result:
-                self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
-                return
+                if result['error']['code'] == 'InvalidAuthenticationToken':
+                    self.logger.error("Error with authentication token: " + result['error']['message'])
+                    self.logger.error("Please re-auth.")
+                    asyncio.get_event_loop().stop()
+                else:
+                    self.logger.debug("Error with result: {}".format(str(result)))
+                    return
             nexturl = None
             for entry in result['value']:
                 parent_list.append(entry[identifier])
@@ -367,9 +384,14 @@ class AzureAdDataDumper(DataDumper):
                     if child == 'federationConfiguration':
                         self.logger.debug("Error with result: {}".format(str(result)))
                         continue
+                    if result['error']['code'] == 'InvalidAuthenticationToken':
+                        self.logger.error("Error with authentication token: " + result['error']['message'])
+                        self.logger.error("Please re-auth.")
+                        asyncio.get_event_loop().stop()
                     else:
-                        self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
+                        self.logger.debug("Error with result: {}".format(str(result)))
                         return
+
                 nexturl = None
                 for entry in result['value']:
                     if "@odata.type" in entry.keys():

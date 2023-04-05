@@ -4,32 +4,44 @@
 """Untitled Goose Tool: d4iot_dumper!
 This module has all the telemetry pulls for Defender for IoT.
 """
+import getpass
 import json
 import os
+
 from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 class DefenderIoTDumper(DataDumper):
-    def __init__(self, output_dir, reports_dir, session, csrftoken, sessionid, config, debug):
+    def __init__(self, output_dir, reports_dir, session, csrftoken, sessionid, config, auth_un_pw, debug):
         super().__init__(f'{output_dir}{os.path.sep}d4iot', reports_dir, csrftoken, sessionid, session, debug)
         self.logger = setup_logger(__name__, debug)
-        self.sensor_token = config_get(config, 'auth', 'd4iot_sensor_token', self.logger)
-        self.mgmt_token = config_get(config, 'auth', 'd4iot_mgmt_token', self.logger)
-        self.sensor_ip = config_get(config, 'auth', 'd4iot_sensor_ip', self.logger)
-        self.mgmt_ip = config_get(config, 'auth', 'd4iot_mgmt_ip', self.logger)
+        if auth_un_pw is not None:
+            if auth_un_pw['auth']['d4iot_sensor_token']:
+                self.sensor_token = auth_un_pw['auth']['d4iot_sensor_token']
+            else:
+                self.sensor_token = getpass.getpass("Please type your D4IOT sensor token. If you don't have a D4IOT sensor, you can leave it blank (hit Enter to continue): ")
+            if auth_un_pw['auth']['d4iot_mgmt_token']:
+                self.mgmt_token = auth_un_pw['auth']['d4iot_mgmt_token']
+            else:
+                self.mgmt_token = getpass.getpass("Please type your D4IOT management console token. If you don't have a D4IOT management console, you can leave it blank (hit Enter to continue): ")
+        else:
+            self.sensor_token = getpass.getpass("Please type your D4IOT sensor token. If you don't have a D4IOT sensor, you can leave it blank (hit Enter to continue): ")
+            self.mgmt_token = getpass.getpass("Please type your D4IOT management console token. If you don't have a D4IOT management console, you can leave it blank (hit Enter to continue): ")
+
+        self.sensor_ip = config_get(config, 'config', 'd4iot_sensor_ip', self.logger)
+        self.mgmt_ip = config_get(config, 'config', 'd4iot_mgmt_ip', self.logger)
 
         self.csrftoken = csrftoken
         self.sessionid = sessionid
-        self.app_id = config['auth']['appid']
-        self.client_secret = self.client_secret = config['auth']['clientsecret']
 
     async def helper_multiple_object_sensor(self, parent, child, identifier='id'):
         if not self.csrftoken or not self.sessionid:
             self.logger.error(f"Missing csrftoken and sessionid from auth. Did you auth correctly?")
             return
+
         base_url = "https://" + str(self.sensor_ip) 
         parent_url = base_url + parent
         parent_header = {'Authorization': '%s' % (self.sensor_token)}
@@ -81,8 +93,6 @@ class DefenderIoTDumper(DataDumper):
             elif type(result) == dict:
                 with open(outfile, 'w+', encoding='utf-8') as f:
                     f.write(json.dumps(result) + "\n")
-
-
                     
         self.logger.info("Finished dumping %s information." % (object))
 

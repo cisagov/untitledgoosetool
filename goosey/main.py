@@ -35,7 +35,7 @@ goosey messagetrace
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 def main():
     # Primary argument parser
@@ -65,6 +65,7 @@ def main():
     d4iot_parser = subparsers.add_parser('d4iot', help='Gather d4iot information')
     getd4iotargs(d4iot_parser)
 
+    # Construct Goosey csv module options
     csv_parser = subparsers.add_parser('csv', help='Create CSVs converting GUIDs to text')
     getcsvargs(csv_parser)
 
