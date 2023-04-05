@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """Untitled Goose Tool: Auth!
-This module handles authentication to an Azure AD, Azure, and M365 environment.
+This module handles authentication to Azure AD, Azure, M365, and D4IoT environments.
 """
 
 import adal
@@ -10,8 +10,11 @@ import argparse
 import atexit
 import configparser
 import copy
+import getpass
 import json
 import msal
+import os
+import pyAesCrypt
 import sys
 import time
 
@@ -24,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 green = "\x1b[1;32m"
 
@@ -39,29 +42,32 @@ class Authentication():
         self.headless = False
         self.logger = None
         self.d4iot = False
+        self.encryption_pw = None
 
     def get_webdriver_browser(self):
+        """
+        Initializes and returns the browser object.
+        """
         browser = None
+
         try:
             opts = FirefoxOptions()
-            # opts.accept_insecure_certs = True
-            # desired_capabilities = DesiredCapabilities.FIREFOX.copy()
-            # desired_capabilities['acceptInsecureCerts'] = True
+            options = {
+                'request_storage': 'memory'
+            }
             if self.headless:
                 opts.add_argument("--headless")
-            # profile = webdriver.FirefoxProfile()
-            # profile.accept_untrusted_certs = True      , firefox_profile=profile 
-            browser = webdriver.Firefox(options=opts)
-
+            browser = webdriver.Firefox(options=opts,seleniumwire_options=options)
         except Exception as e:
             self.logger.error(f'Error getting Firefox webdriver: {str(e)}. Exiting.')
             sys.exit(1)
+            
         return browser
 
     def get_authority_url(self):
         """
-        Returns the authority URL for the tenant specified, or the
-        common one if no tenant was specified
+        Returns the authority URL for the commercial or government tenant specified,
+        or the common one if no tenant was specified. 
         """
         if self.us_government == 'false':
             if self.tenant is not None:
@@ -73,48 +79,41 @@ class Authentication():
             return 'https://login.microsoftonline.us/common'
 
     def get_d4iot_sensor_uri(self):
+        """
+        Returns the d4iot sensor URI.
+        """
         return "https://" + self.d4iot_sensor_ip
 
     def get_mfa_resource_uri(self):
-
+        """
+        Returns the MFA Graph API resource URI for a commercial or government tenant.
+        """
         if self.us_government == 'false':
             return 'https://graph.microsoft.com/.default'
         elif self.us_government == 'true':
             return 'https://graph.microsoft.us/.default'
 
     def get_app_resource_uri(self):
-
+        """
+        Returns the application resource URI for a commercial or government tenant.
+        """
         if self.us_government == 'false':
             return ['https://graph.microsoft.com/.default', 'https://api.securitycenter.microsoft.com/.default', 'https://management.azure.com/.default']
         elif self.us_government == 'true':
             return 'https://graph.microsoft.us/.default'
 
-    def authenticate_device_code(self):
+    def authenticate_device_code_selenium(self):
         """
-        Authenticate the end-user using device auth.
+        Authenticate the end-user using device authentication through Selenium.
         """
-        authority_host_uri = self.get_authority_url()
-
-        context = msal.ConfidentialClientApplication(client_id=self.client_id, client_credential=self.client_secret, authority=authority_host_uri)
-        code = context.acquire_user_code(self.resource_uri, self.client_id)
-        self.logger.info(code['message'])
-        self.tokendata = context.acquire_token_with_device_code(self.resource_uri, code, self.client_id)
-        return self.tokendata
-
-    def authenticate_device_code_selenium(self, cache=None):
-        """
-        Authenticate the end-user using device auth through Selenium.
-        """
-
-        # TODO: Check that all required args are present
-
         authority_host_uri = self.get_authority_url()
         self.logger.debug(f"Device code selenium authority uri: {str(authority_host_uri)}")
         resource_uri = self.get_mfa_resource_uri()
         self.logger.debug(f"Device code selenium resource uri: {str(resource_uri)}")
-        cache = msal.SerializableTokenCache()
-        context = msal.PublicClientApplication(client_id=self.client_id,  authority=authority_host_uri, token_cache=cache)
+
+        context = msal.PublicClientApplication(client_id=self.client_id, authority=authority_host_uri)
         code = context.initiate_device_flow(scopes=[resource_uri])
+
         self.logger.info('Attempting to automatically auth via device code. You may have to accept MFA prompts.')
 
         one_time_code = code['message'].split(' ')[16]
@@ -133,13 +132,13 @@ class Authentication():
                 elif self.us_government == 'true':
                     browser.get("https://login.microsoftonline.us/common/oauth2/deviceauth")
 
-            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(CODEFIELD)).send_keys(one_time_code)
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(CODEFIELD)).send_keys(one_time_code)
 
-            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
-            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
 
-            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'usernameError')))
@@ -148,10 +147,10 @@ class Authentication():
             except Exception as e:
                 pass                  
                 
-            WebDriverWait(browser, 15).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
 
-            WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
-            
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+           
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
                 browser.quit()
@@ -167,19 +166,23 @@ class Authentication():
                 pass    
 
             try:
-                WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
+                WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
                 browser.quit()
                 sys.exit("Password reset required. Change your password and try again.")
             except Exception as e:
                 pass
-           
-            if EC.text_to_be_present_in_element((By.ID, "appConfirmTitle"), "Are you trying to sign to Azure Active Directory PowerShell?"):
-                WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
-            # Wait for MFA
-            WebDriverWait(browser, 30).until(EC.text_to_be_present_in_element((By.ID, "message"), "You have signed in to the Azure Active Directory PowerShell application on your device. You may now close this window."))
-           
+            try:
+                if "Your organization needs more information to keep your account secure" in browser.find_element(By.ID, "ProofUpDescription").text:
+                    browser.quit()
+                    sys.exit("Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
+            except Exception as e:
+                pass
 
+            # Wait for AAD PowerShell prompt
+            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+
+            WebDriverWait(browser, 60).until(EC.text_to_be_present_in_element((By.ID, "message"), "You have signed in to the Azure Active Directory PowerShell application on your device. You may now close this window."))
         except Exception as e:
             return False
 
@@ -197,27 +200,31 @@ class Authentication():
         for key in token_data_to_add:
             self.tokendata[key] = token_data_to_add[key]
         
-        atexit.register(lambda:open("token_cache.bin", "w").write(cache.serialize()) if cache.has_state_changed else None)
+        self.logger.info('Device code authentication complete.')
 
         return self.tokendata
 
     def authenticate_as_app(self, resource_uri):
         """
-        Authenticate with an APP id + secret (password credentials assigned to serviceprinicpal)
+        Authenticate with an application id + client secret (password credentials assigned to serviceprinicpal)
         """
         authority_uri = self.get_authority_url()
         self.logger.debug(f"App Authentication authority uri: {str(authority_uri)}")
         self.logger.debug(f"App authentication resource uri: {str(resource_uri)}")
         context = msal.ConfidentialClientApplication(client_id=self.app_client_id, client_credential=self.client_secret, authority=authority_uri)
         self.tokendata = context.acquire_token_for_client(resource_uri)
+        if 'error' in self.tokendata:
+            if self.tokendata['error'] == 'invalid_client':
+                self.logger.error("There was an issue with your application auth: " + self.tokendata['error_description'])
+                sys.exit(1)
         if 'expires_in' in self.tokendata:
             expiration_time = time.time() + self.tokendata['expires_in']
-        self.tokendata['expires_on'] = expiration_time
+            self.tokendata['expires_on'] = expiration_time
         return self.tokendata
 
     def authenticate_mfa_interactive(self):
         """
-        Authenticate via username, password, and MFA to get session ID and sccauth cookies.
+        Authenticate via username, password, and MFA to get session ID and cookies.
         """
 
         if self.auth_device_selenium:
@@ -229,8 +236,12 @@ class Authentication():
         PASSWORDFIELD = (By.ID, "i0118")
         NEXTBUTTON = (By.ID, "idSIButton9")
 
+        self.logger.info('Attempting to automatically auth as an user. You may have to accept MFA prompts.')
+
         browser = self.get_webdriver_browser()
+
         if self.m365 == 'true':
+            self.logger.debug("M365 authentication set to True. Pulling authentication information.")
             try:
                 if browser:
                     if self.us_government == 'false':
@@ -238,9 +249,9 @@ class Authentication():
                     elif self.us_government == 'true':
                         browser.get("https://login.microsoftonline.us")
 
-                    WebDriverWait(browser, 10).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
-                    # Click Next
-                    WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
+                    
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'usernameError')))
@@ -249,10 +260,9 @@ class Authentication():
                     except Exception as e:
                         pass     
 
-                    # find password input field and insert password as well
-                    WebDriverWait(browser, 10).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
-                    # Click Login 
-                    WebDriverWait(browser, 10).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
+                    
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
@@ -273,129 +283,87 @@ class Authentication():
                         browser.quit()
                         sys.exit("Declined MFA. Please correct it and try again.") 
                     except Exception as e:
+                        pass
+
+                    try:
+                        if "Your organization needs more information to keep your account secure" in browser.find_element(By.ID, "ProofUpDescription").text:
+                            browser.quit()
+                            sys.exit("Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
+                    except Exception as e:
                         pass    
 
-                    # Switch to second window
+                    # Switch to second tab
                     browser.execute_script("window.open('');")
                     browser.switch_to.window(browser.window_handles[1])
+                    self.logger.debug("Opening second tab: Exchange Control Panel")
                     if self.exo_us_government == 'false':
                         browser.get("https://outlook.office365.com/ecp")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://outlook.office365.com/ecp'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://outlook.office365.com/ecp'))
                         except Exception as e:
                             pass
                     elif self.exo_us_government == 'true':
                         browser.get("https://outlook.office365.us/ecp")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://outlook.office365.us/ecp'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://outlook.office365.us/ecp'))
                         except Exception as e:
                             pass
+                    self.logger.debug("Completed loading second window!")
                     time.sleep(1)
 
-                    if self.msgtrc == 'true':
-                        print("Msgtrc = true")
-                        browser.execute_script("window.open('');")
-                        browser.switch_to.window(browser.window_handles[2])
-                        if self.exo_us_government == 'false':
-                            browser.get("https://admin.exchange.microsoft.com/")
-                            try:
-                                WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.exchange.microsoft.com/#/'))
-                                browser.get("https://admin.exchange.microsoft.com/#/messagetrace")
-                                WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.exchange.microsoft.com/#/messagetrace'))
-                            except Exception as e:
-                                pass
-                        elif self.exo_us_government == 'true':
-                            browser.get("http://admin.exchange.office365.us/#/messagetrace")
-                            try:
-                                WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.exchange.microsoft.us/#/'))
-                            except Exception as e:
-                                pass
-                        time.sleep(1)
-                    else:
-                        browser.execute_script("window.open('');")
-                        browser.switch_to.window(browser.window_handles[2])
-                        if self.exo_us_government == 'false':
-                            browser.get("https://admin.exchange.microsoft.com")
-                            try:
-                                WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.exchange.microsoft.com'))
-                            except Exception as e:
-                                pass
-                        elif self.exo_us_government == 'true':
-                            browser.get("http://admin.exchange.office365.us/")
-                            try:
-                                WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.exchange.microsoft.us'))
-                            except Exception as e:
-                                pass
-                        time.sleep(1)
-
-                    """ if self.get_csp:
-                        self.logger.info('Acquiring auth for admin.microsoft.com since CSP data pull is enabled.')
-                        browser.execute_script("window.open('');")
-                        browser.switch_to.window(browser.window_handles[3])
-                        if self.exo_us_government == 'false':
-                            browser.get("https://admin.microsoft.com")
+                    # Switch to third tab
+                    browser.execute_script("window.open('');")
+                    browser.switch_to.window(browser.window_handles[2])
+                    self.logger.debug("Opening third tab: Admin Exchange Portal")
+                    if self.exo_us_government == 'false':
+                        browser.get("https://admin.exchange.microsoft.com/")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.microsoft.com'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://admin.exchange.microsoft.com/#/'))
+                            browser.get("https://admin.exchange.microsoft.com/#/messagetrace")
+                            WebDriverWait(browser, 20).until((EC.url_matches('https://admin.exchange.microsoft.com/#/messagetrace')))
                         except Exception as e:
                             pass
-                        if self.exo_us_government == 'true':
-                            browser.get("https://admin.microsoft.us")
+                    elif self.exo_us_government == 'true':
+                        browser.get("http://admin.exchange.office365.us/#/messagetrace")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://admin.microsoft.us'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://admin.exchange.microsoft.us/#/'))
+                            browser.get("https://admin.exchange.microsoft.us/#/messagetrace")
+                            WebDriverWait(browser, 20).until((EC.url_matches('https://admin.exchange.microsoft.us/#/messagetrace')))
                         except Exception as e:
                             pass
-                        time.sleep(1)
-                    else:
-                        self.logger.info("Skipping auth for admin.microsoft.com since CSP data pull is disabled.")
-                    """
+                    self.logger.debug("Completed loading third window!")
+                    time.sleep(1)
 
-                    # Switch back to first window
+                    # Switch back to first tab
                     browser.switch_to.window(browser.window_handles[0])
-
-                    # Stay signed in
-                    try:
-                        WebDriverWait(browser, 20).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
-                    except Exception as e:
-                        pass
-
+                    self.logger.debug("Switching back to first tab: Audit Log Search.")
                     if self.exo_us_government == 'false':
                         browser.get("https://security.microsoft.com/auditlogsearch")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://security.microsoft.com/auditlogsearch'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://security.microsoft.com/auditlogsearch'))
                         except Exception as e:
                             pass
                     elif self.exo_us_government == 'true':
                         browser.get("https://security.microsoft.us/auditlogsearch")
                         try:
-                            WebDriverWait(browser, 10).until(EC.url_to_be('https://security.microsoft.us/auditlogsearch'))
+                            WebDriverWait(browser, 20).until(EC.url_matches('https://security.microsoft.us/auditlogsearch'))
                         except Exception as e:
                             pass
 
                     self.tokendata['sessionId'] = browser.get_cookie('s.SessID').get('value')
                     self.tokendata['sccauth'] = browser.get_cookie('sccauth').get('value')
                     self.tokendata['xsrf'] = browser.get_cookie('XSRF-TOKEN').get('value')
-                    self.logger.info('Obtained audit log cookies.')
+                    self.logger.info('First tab: Obtained audit log cookies.')
 
-                    """ if self.get_csp:
-                        browser.switch_to.window(browser.window_handles[3])
+                    browser.switch_to.window(browser.window_handles[2])
 
-                        self.tokendata['RootAuthToken'] = browser.get_cookie('RootAuthToken').get('value')
-                        self.tokendata['userIndex'] = browser.get_cookie('UserIndex').get('value')
-                        self.tokendata['OIDCAuth'] = browser.get_cookie('OIDCAuthCookie').get('value')
-                        self.tokendata['s.LoginUserTenantId'] = browser.get_cookie('s.LoginUserTenantId').get('value')
-                    """
+                    self.tokendata['.AspNet.Cookies'] = browser.get_cookie('.AspNet.Cookies').get('value')
 
-                    if self.msgtrc == 'false':
-                        browser.switch_to.window(browser.window_handles[2])
-                        self.tokendata['.AspNet.Cookies'] = browser.get_cookie('.AspNet.Cookies').get('value')
-                    elif self.msgtrc == 'true':
-                        browser.switch_to.window(browser.window_handles[2])
+                    for request in browser.requests:
+                        if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
+                            self.tokendata['validationkey'] = request.headers['validationkey']     
 
-                        self.tokendata['.AspNet.Cookies'] = browser.get_cookie('.AspNet.Cookies').get('value')
-
-                        for request in browser.requests:
-                            if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
-                                self.tokendata['validationkey'] = request.headers['validationkey']                    
+                    self.logger.info("Third tab: Obtained Exchange cookies.")               
 
                     browser.switch_to.window(browser.window_handles[1])
 
@@ -412,7 +380,7 @@ class Authentication():
                         else:
                             self.tokendata['msExchEcpCanary'] = browser.get_cookie('msExchEcpCanary').get('value')
                             self.tokendata['OpenIdConnect.token.v1'] = browser.get_cookie('OpenIdConnect.token.v1').get('value')
-                            self.logger.info('Exchange cookies acquired.')
+                            self.logger.info('Second tab: Exchange Control Panel cookies acquired.')
                             done = True
                     result = True
                 else:
@@ -426,6 +394,8 @@ class Authentication():
                     browser.quit()
                 except Exception as e:
                     pass
+
+            self.logger.info('User authentication complete.')
         else:
             self.logger.info("m365 auth set to False. Not gathering Exchange cookies.")
         return result
@@ -438,24 +408,33 @@ class Authentication():
         auth_parser.add_argument('-a',
                                  '--authfile',
                                  action='store',
-                                 help='File to store the credentials (default: .ugt_auth)',
+                                 help='File to store the authentication tokens and cookies (default: .ugt_auth)',
                                  default='.ugt_auth')
         auth_parser.add_argument('--d4iot-authfile',
                                  action='store',
-                                 help='File to store the credentials for defender for iOt(default: .d4iot_auth)',
+                                 help='File to store the authentication cookies for D4IoT (default: .d4iot_auth)',
                                  default='.d4iot_auth')
         auth_parser.add_argument('-c',
                                  '--config',
                                  action='store',
-                                 help='Path to config file with auth credentials',
+                                 help='Path to config file (default: .conf)',
                                  default='.conf')
+        auth_parser.add_argument('-ac',
+                                 '--auth',
+                                 action='store',
+                                 help='File to store the credentials used for authentication (default: .auth)',
+                                 default='.auth')
+        auth_parser.add_argument('--d4iot-auth',
+                                 action='store',
+                                 help='File to store the D4IoT credentials used for authentication (default: .auth_d4iot)',
+                                 default='.auth_d4iot')
         auth_parser.add_argument('--d4iot-config',
                                  action='store',
-                                 help='Path to config file with d4iot auth credentials',
+                                 help='Path to D4IoT config file (default: .d4iot_conf)',
                                  default='.d4iot_conf')
         auth_parser.add_argument('--revoke',
                                  action='store_true',
-                                 help='Revoke sessions for user with credentials in tokenfile (default to .ugt_auth)',
+                                 help='Revoke sessions for user with authentication tokens and cookies (default: .ugt_auth)',
                                  default=False)
         auth_parser.add_argument('--interactive',
                                  action='store_true',
@@ -463,42 +442,73 @@ class Authentication():
                                  default=False)
         auth_parser.add_argument('--debug',
                                  action='store_true',
-                                 help='Enable debug logging to disk')
+                                 help='Enable debug logging')
         auth_parser.add_argument('--d4iot',
                                  action='store_true',
                                  help='Run the authentication portion for d4iot',
                                  default=False)
+        auth_parser.add_argument('--secure',
+                                 action='store_true',
+                                 help='Enable secure authentication handling (file encryption)')
         return auth_parser
 
 
     def parse_config(self, configfile):
         config = configparser.ConfigParser()
         config.read(configfile)
-        self.username = config_get(config, 'auth', 'username', self.logger)
-        self.password = config_get(config, 'auth', 'password', self.logger)
-        self.app_client_id = config_get(config, 'auth', 'appid', self.logger)
-        self.client_secret = config_get(config, 'auth', 'clientsecret', self.logger)
-        self.tenant = config_get(config, 'auth', 'tenant', self.logger)
+        if not self.d4iot:
+            self.tenant = config_get(config, 'config', 'tenant', self.logger)
+            self.us_government = config_get(config, 'config', 'us_government', self.logger).lower()
+            self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
+            self.subscriptions = config_get(config, 'config', 'subscriptionid', self.logger)
+            self.m365 = config_get(config, 'config', 'm365', self.logger).lower()
+        else:
+            self.d4iot_sensor_ip = config_get(config, 'config', 'd4iot_sensor_ip', self.logger)
+            self.d4iot_mgmt_ip = config_get(config, 'config', 'd4iot_mgmt_ip', self.logger)
 
-        if self.d4iot:
-            self.d4iot_sensor_token = config_get(config, 'auth', 'd4iot_sensor_token', self.logger)
-            self.d4iot_mgmt_token = config_get(config, 'auth', 'd4iot_mgmt_token', self.logger)
-            self.d4iot_sensor_ip = config_get(config, 'auth', 'd4iot_sensor_ip', self.logger)
-            self.d4iot_mgmt_ip = config_get(config, 'auth', 'd4iot_mgmt_ip', self.logger)
+        return config
+
+    def parse_auth(self, authfile=None):
+        if authfile is not None:
+            auth = configparser.ConfigParser()
+            auth.read(authfile)
+            if config_get(auth, 'auth', 'username', self.logger):
+                self.username = config_get(auth, 'auth', 'username', self.logger)
+            else:
+                self.username = input("Please type your username: ")
+            if config_get(auth, 'auth', 'password', self.logger):
+                self.password = config_get(auth, 'auth', 'password', self.logger)
+            else:
+                self.password = getpass.getpass("Please type your password: ")
+            if not self.d4iot:
+                if config_get(auth, 'auth', 'appid', self.logger):
+                    self.app_client_id = config_get(auth, 'auth', 'appid', self.logger)
+                else:
+                    self.app_client_id = input("Please type your application client id: ")
+                if config_get(auth, 'auth', 'clientsecret', self.logger):
+                    self.client_secret = config_get(auth, 'auth', 'clientsecret', self.logger)
+                else:
+                    self.client_secret = getpass.getpass("Please type your client secret: ")       
+
+            if self.d4iot:
+                if config_get(auth, 'auth', 'd4iot_sensor_token', self.logger):
+                    self.d4iot_sensor_token = config_get(auth, 'auth', 'd4iot_sensor_token', self.logger)
+                else:
+                    self.d4iot_sensor_token = getpass.getpass("Please type your D4IOT sensor token: ")
+                if config_get(auth, 'auth', 'd4iot_mgmt_token', self.logger):
+                    self.d4iot_mgmt_token = config_get(auth, 'auth', 'd4iot_mgmt_token', self.logger)
+                else:
+                    self.d4iot_mgmt_token = getpass.getpass("Please type your D4IOT management console token: ")
 
         else:
-            self.us_government = config_get(config, 'auth', 'us_government', self.logger).lower()
-            self.exo_us_government = config_get(config, 'auth', 'exo_us_government', self.logger).lower()
-            self.msgtrc = config_get(config, 'auth', 'msgtrace', self.logger).lower()
-            self.subscriptions = config_get(config, 'auth', 'subscriptionid', self.logger)
-            self.m365 = config_get(config, 'auth', 'm365', self.logger).lower()
-
-        """# Get CSP to know if we need to auth to admin.microsoft.com
-        self.get_csp = config_get(config, 'azuread', 'csp', self.logger).lower() == 'true'
-        """
-
-        # TODO: Read other options in config file and see what resource URIs we need
-        return config
+            self.username = input("Please type your username: ")
+            self.password = getpass.getpass("Please type your password: ")
+            if not self.d4iot:
+                self.app_client_id = input("Please type your application client id: ")
+                self.client_secret = getpass.getpass("Please type your client secret: ")
+            else:
+                self.d4iot_sensor_token = getpass.getpass("Please type your D4IOT sensor token: ")
+                self.d4iot_mgmt_token = getpass.getpass("Please type your D4IOT management console token: ")
 
     def _read_current_tokens(self, authfile: str):
         tokens = {} 
@@ -511,6 +521,16 @@ class Authentication():
         return tokens
 
     def d4iot_auth(self):
+        if self.secure:
+            if self.encryption_pw is None:
+                self.encryption_pw = getpass.getpass("Please type the password for file encryption: ")            
+            dir_path = os.path.dirname(os.path.realpath(self.d4iot_authfile))
+            encrypted_authfile = os.path.join(dir_path, self.d4iot_authfile + '.aes')           
+            if os.path.isfile(encrypted_authfile):
+                pyAesCrypt.decryptFile(encrypted_authfile, self.d4iot_authfile, self.encryption_pw)
+                os.remove(encrypted_authfile)
+                self.logger.debug("Decrypted the " + self.d4iot_authfile + " file!")
+
         if self.username and self.password:
             self.auth_device_selenium = True 
 
@@ -519,14 +539,13 @@ class Authentication():
         if 'sensor' not in custom_auth_dict:
             custom_auth_dict['sensor'] = {}
 
-
         USERNAMEFIELD = (By.ID, "TextField3")
         PASSWORDFIELD = (By.ID, "TextField6")
         NEXTBUTTON = (By.ID, "id__9")
         
         url = self.get_d4iot_sensor_uri()
 
-        self.logger.debug("Authenticating to Defender for IoT sensor at %s" % (url))
+        self.logger.info("Authenticating to Defender for IoT sensor at %s" % (url))
         browser = self.get_webdriver_browser()
         if self.d4iot:
             try:
@@ -538,11 +557,11 @@ class Authentication():
                     except Exception as e:
                         pass
                     
-                    WebDriverWait(browser, 1).until(EC.element_to_be_clickable(USERNAMEFIELD)).send_keys(self.username)
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(USERNAMEFIELD)).send_keys(self.username)
                     
-                    WebDriverWait(browser, 1).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
 
-                    WebDriverWait(browser, 1).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
+                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
                     # Click Next
                     
                     time.sleep(2)
@@ -561,11 +580,31 @@ class Authentication():
                     self.logger.info(green + "Authentication complete." + green)
             except Exception as e:
                 print(e)
+            if self.secure:
+                if os.path.isfile(self.d4iot_authfile):
+                    pyAesCrypt.encryptFile(self.d4iot_authfile, encrypted_authfile, self.encryption_pw)
+                    os.remove(self.d4iot_authfile)
+                    self.logger.debug("Encrypted the " + self.d4iot_authfile + " file!")  
 
+    def ugt_auth(self):     
 
-    def ugt_auth(self):
+        if self.secure:
+            if self.encryption_pw is None:
+                self.encryption_pw = getpass.getpass("Please type the password for file encryption: ")            
+            dir_path = os.path.dirname(os.path.realpath(self.authfile))
+            encrypted_authfile = os.path.join(dir_path, self.authfile + '.aes')           
+            if os.path.isfile(encrypted_authfile):
+                pyAesCrypt.decryptFile(encrypted_authfile, self.authfile, self.encryption_pw)
+                os.remove(encrypted_authfile)
+                self.logger.debug("Decrypted the " + self.authfile + " file!")
 
         custom_auth_dict = self._read_current_tokens(self.authfile)
+
+        if self.secure:
+            if os.path.isfile(self.authfile):
+                pyAesCrypt.encryptFile(self.authfile, encrypted_authfile, self.encryption_pw)
+                os.remove(self.authfile)
+                self.logger.debug("Encrypted the " + self.authfile + " file!")                  
 
         if 'mfa' not in custom_auth_dict:
             custom_auth_dict['mfa'] = {}
@@ -574,17 +613,22 @@ class Authentication():
         if 'sdk_auth' not in custom_auth_dict:
             custom_auth_dict['sdk_auth'] = {}
         
+        if self.secure:
+            dir_path = os.path.dirname(os.path.realpath(self.auth))
+            encrypted_auth = os.path.join(dir_path, self.auth + '.aes')  
+
+            if not os.path.isfile(self.auth) or not os.path.isfile(encrypted_auth):
+                self.logger.debug("No auth file and no encrypted auth file detected.")         
 
         if self.username and self.password:
             self.auth_device_selenium = True 
-
+            
             self.authenticate_mfa_interactive()
        
         custom_auth_dict['sdk_auth']['tenant_id'] = self.tenant 
         custom_auth_dict['sdk_auth']['app_id'] = self.app_client_id
         custom_auth_dict['sdk_auth']['client_secret'] = self.client_secret         
         custom_auth_dict['sdk_auth']['subscriptionid'] = self.subscriptions 
-
 
         uri = self.get_mfa_resource_uri()
 
@@ -618,6 +662,13 @@ class Authentication():
                     json.dump(custom_auth_dict, outfile, indent=2, sort_keys=True)
             except Exception as e:
                 self.logger.error(f"Error writing auth to file: {str(e)}")
+
+        if self.secure:
+            if os.path.isfile(self.authfile):
+                pyAesCrypt.encryptFile(self.authfile, encrypted_authfile, self.encryption_pw)
+                os.remove(self.authfile)
+                self.logger.debug("Encrypted the " + self.authfile + " file!")    
+        
 
     def revoke_tokens(self, args) -> None:
 
@@ -664,98 +715,51 @@ class Authentication():
         if browser:
             browser.quit()
 
-    def authenticate_with_refresh(self, config, oldtokendata):
-        """
-        Authenticate with a refresh token, refreshes the refresh token
-        and obtains an access token
-        """
-        self.us_government = config_get(config, 'auth', 'us_government', self.logger).lower()
-        authority_uri = self.get_authority_url()
-
-        context = adal.AuthenticationContext(authority_uri, api_version=None, proxies=None, verify_ssl=True)
-        resource_uri = self.get_resource_uri()
-        try:
-            newtokendata = context.acquire_token_with_refresh_token(oldtokendata['refreshToken'], self.client_id, resource_uri)
-        except Exception as e:
-            if self.logger:
-                self.logger.warning("Error with acquiring context token.")
-            else:
-                self.logger.error("Error with acquiring context token.")
-            return self.tokendata
-        # Overwrite fields
-        for ikey, ivalue in newtokendata.items():
-            self.tokendata[ikey] = ivalue
-        return self.tokendata
-
     def parse_args(self, args):
-        self.authfile = args.authfile
         self.debug = args.debug
+        self.logger = setup_logger(__name__, self.debug)
+        self.authfile = args.authfile
+        self.auth = args.auth
+        self.secure = args.secure
         if args.d4iot:
             self.d4iot = True
             self.config = args.d4iot_config
             self.d4iot_authfile = args.d4iot_authfile
+            self.auth = args.d4iot_auth
         else:
             self.config = args.config
         self.headless = not args.interactive
-        self.parse_config(self.config)
-        self.logger = setup_logger(__name__, self.debug)
+        if self.secure:
+            dir_path = os.path.dirname(os.path.realpath(self.auth))
+            encrypted_auth = os.path.join(dir_path, self.auth + '.aes')             
+            if os.path.isfile(encrypted_auth):
+                self.encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+                pyAesCrypt.decryptFile(encrypted_auth, self.auth, self.encryption_pw)
+                os.remove(encrypted_auth)
+                self.logger.debug("Decrypted the " + self.auth + " file!")
+                
+        if os.path.isfile(self.auth):
+            self.parse_auth(self.auth)
+        else:
+            self.logger.debug("No .auth file detected, proceeding with prompting user for username, password, application id, and application client secret inputs.")
+            self.parse_auth()
+        
+        if self.secure:
+            if os.path.isfile(self.auth):
+                if self.encryption_pw is None:
+                    self.encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+                pyAesCrypt.encryptFile(self.auth, encrypted_auth, self.encryption_pw)
+                os.remove(self.auth)
+                self.logger.debug("Encrypted the " + self.auth + " file!")
+
+        self.parse_config(self.config)      
 
 def check_app_auth_token(auth_data, logger):
     expiry_time = auth_data['expires_on']
     if time.time() > expiry_time:
         logger.warning("Authentication expired. Please re-authenticate before proceeding.")
-        return True
-    return False
-
-
-def check_token(config, auth_data: dict, logger, EXPIRY_THRESHOLD_SECONDS=300):
-    """Token refresher
-
-    :param auth_data: Authentication data from auth file
-    :type auth_data: dict
-    :return: Updated authentication tokens
-    :rrtype: dict
-    """
-
-    logger.info("Checking auth token for expiry")
-
-    if auth_data == {}:
-        logger.info("No MFA tokens (was M365 set to False?) detected, proceeding.")
-    else:
-        if not 'exp' in auth_data['id_token_claims']:
-            logger.debug('No expireTime set in auth_data, returning')
-            return auth_data 
-        
-        if time.time() > auth_data['id_token_claims']['exp']:
-            logger.debug("Auth token within expiry threshold. Attempting to refresh...")
-            auth = Authentication()
-            auth.tokendata = auth_data
-            auth.tenant = auth_data['tenantId']
-            auth.us_government = config['auth']['us_government'].lower()
-            authority_host_uri = auth.get_authority_url()
-            cache = msal.SerializableTokenCache()
-            if os.path.exists("token_cache.bin"):
-                cache.deserialize(open("token_cache.bin", "r").read())
-            
-            context = msal.PublicClientApplication(client_id=auth.client_id,  authority=authority_host_uri, token_cache=cache)
-            accounts = context.get_accounts()
-            token_data_to_add = context.acquire_token_silent(scopes=[auth.resource_uri], account=accounts[0])
-
-            if 'access_token' in token_data_to_add:
-                if token_data_to_add.get('access_token') == '':
-                    logger.warning("Error refreshing token, attempt re-auth!")
-                    return auth_data
-                logger.info('Refreshed token successfully.')
-                for ikey, ivalue in token_data_to_add.items():
-                    auth_data[ikey] = ivalue
-                return auth_data
-            elif time.time() >  auth_data['id_token_claims']['exp']:
-                logger.warning('Access token is expired, but no access to refresh token!')
-                return auth_data
-
-        else:
-            logger.info("Auth token is not within expiry threshold, proceeding.")
-    return auth_data    
+        sys.exit(1)
+    return False  
 
 def main():
     parser = argparse.ArgumentParser(add_help=True, description='Untitled Goose Tool Authentication', formatter_class=argparse.RawDescriptionHelpFormatter)

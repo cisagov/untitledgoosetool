@@ -14,7 +14,7 @@ from tkinter import E
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -33,7 +33,7 @@ def getargs(csv_parser) -> None:
     csv_parser.add_argument('-r',
                                '--result_dir',
                                action='store',
-                               help='The directory where the goose files are located',
+                               help='Directory for storing the results (default: output/csvs)',
                                default='output/csvs/')
     csv_parser.add_argument('--debug',
                                action='store_true',

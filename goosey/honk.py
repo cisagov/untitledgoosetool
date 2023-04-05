@@ -9,13 +9,14 @@ import aiohttp
 import argparse
 import asyncio
 import configparser
+import getpass
 import json
 import os
+import pyAesCrypt
 import sys
 import time
 import warnings
 
-from goosey.auth import check_token
 from goosey.azure_ad_datadumper import AzureAdDataDumper
 from goosey.azure_dumper import AzureDataDumper
 from goosey.datadumper import DataDumper
@@ -24,7 +25,7 @@ from goosey.mde_datadumper import MDEDataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -33,6 +34,7 @@ warnings.simplefilter('ignore')
 
 logger = None
 data_calls = {}
+encryption_pw = None
 
 def getargs(honk_parser) -> None:
     """Helper function to build arguments for argparse
@@ -45,24 +47,29 @@ def getargs(honk_parser) -> None:
     honk_parser.add_argument('-a',
                                '--authfile',
                                action='store',
-                               help='File to read credentials from obtained by goosey auth',
+                               help='File to store the authentication tokens and cookies (default: .ugt_auth)',
                                default='.ugt_auth')
     honk_parser.add_argument('-c',
                                '--config',
                                action='store',
-                               help='Path to config file',
+                               help='Path to config file (default: .conf)',
                                default='.conf')
+    honk_parser.add_argument('-ac',
+                               '--auth',
+                               action='store',
+                               help='File to store the credentials used for authentication (default: .auth)',
+                               default='.auth')
     honk_parser.add_argument('--output-dir',
                                action='store',
-                               help='Output directory for output files',
+                               help='Directory for storing the results (default: output)',
                                default='output')
     honk_parser.add_argument('--reports-dir',
                                action='store',
-                               help='Output directory for output files',
+                               help='Directory for storing debugging/informational logs (default: reports)',
                                default='reports')                               
     honk_parser.add_argument('--debug',
                                action='store_true',
-                               help='Debug output',
+                               help='Enable debug logging',
                                default=False)
     honk_parser.add_argument('--dry-run',
                                action='store_true',
@@ -70,7 +77,7 @@ def getargs(honk_parser) -> None:
                                default=False)
     honk_parser.add_argument('--azure',
                                 action='store_true',
-                                help='Set all of the azure calls to true',
+                                help='Set all of the Azure calls to true',
                                 default=False)
     honk_parser.add_argument('--ad',
                                 action='store_true',
@@ -85,12 +92,12 @@ def getargs(honk_parser) -> None:
                                 help='Set all of the MDE calls to true',
                                 default=False)
 
-async def run(args, config, auth):
+async def run(args, config, auth, auth_un_pw=None):
     """Main async run loop
 
     :param args: argparse object with populated namespace
     :type args: Namespace argparse object
-    :param auth: All auth credentials
+    :param auth: All token auth credentials
     :type auth: dict
     :return: None
     :rtype: None
@@ -114,9 +121,8 @@ async def run(args, config, auth):
         if 'api.securitycenter.microsoft.com' in key:
             msft_security_center_auth = auth['app_auth'][key]
 
-    msft_graph_auth = check_token(config, msft_graph_auth, logger)
-
     maindumper = DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, session, args.debug)
+
     if args.dry_run:
         m365dumper = maindumper 
         azureaddumper = maindumper
@@ -125,7 +131,7 @@ async def run(args, config, auth):
     else:
         m365dumper = M365DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
         azureaddumper = AzureAdDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
-        azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, args.debug)
+        azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, auth_un_pw, args.debug)
         mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_security_center_auth, maindumper.ahsession, config, args.debug)
 
     async with maindumper.ahsession as ahsession:
@@ -178,7 +184,7 @@ def parse_config(configfile, args):
         
 def main(args=None, gui=False) -> None:
     global logger
-
+    global encryption_pw
     parser = argparse.ArgumentParser(add_help=True, description='Goosey', formatter_class=argparse.RawDescriptionHelpFormatter)
 
     getargs(parser)
@@ -191,19 +197,72 @@ def main(args=None, gui=False) -> None:
     else:
         logger = setup_logger(__name__, args.debug)
 
+    auth = {}
+
+    encrypted_auth = False
+    encrypted_authfile = False
+
+    dir_path = os.path.dirname(os.path.realpath(args.auth))
+    encrypted_auth = os.path.join(dir_path, self.auth + '.aes')
+
+    dir_path = os.path.dirname(os.path.realpath(args.authfile))
+    encrypted_authfile = os.path.join(dir_path, self.authfile + '.aes')
+
+    encrypted = False
+
+    if os.path.isfile(encrypted_auth):
+        encrypted = True
+        if encryption_pw is None:
+            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+
+        pyAesCrypt.decryptFile(encrypted_auth, args.auth, encryption_pw)
+        os.remove(encrypted_auth)
+        logger.debug("Decrypted the " + self.auth + " file!")
+
+    try:
+        if os.path.isfile(args.auth):
+            logger.info("Reading in auth: {}".format(args.auth))
+            with open(args.auth, 'r') as infile:
+                auth_un_pw = parse_config(args.auth, args)
+        else:
+            auth_un_pw = None
+    except Exception as e:
+        logger.error("{}".format(str(e)))
+        raise e      
+
+    if encrypted:
+        if os.path.isfile(args.auth):
+            pyAesCrypt.encryptFile(args.auth, encrypted_auth, encryption_pw)
+            os.remove(args.auth)
+            logger.debug("Encrypted the " + self.auth + " file!")              
+
+    if os.path.isfile(encrypted_authfile):
+        encrypted_ugtauth = True
+        if encryption_pw is None:
+            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
+
+        pyAesCrypt.decryptFile(encrypted_authfile, args.authfile, encryption_pw)
+        os.remove(encrypted_authfile)
+        logger.debug("Decrypted the " + self.authfile + " file!")
+
     if not os.path.isfile(args.authfile):
         logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
         sys.exit(1)
 
-    auth = {}
     try:
         logger.info("Reading in authfile: {}".format(args.authfile))
         with open(args.authfile, 'r') as infile:
             auth = json.loads(infile.read())
     except Exception as e:
         logger.error("{}".format(str(e)))
-        raise e
+        raise e    
 
+    if encrypted_ugtauth:
+        if os.path.isfile(args.authfile):
+            pyAesCrypt.encryptFile(args.authfile, encrypted_authfile, encryption_pw)
+            os.remove(args.authfile)
+            logger.debug("Encrypted the " + self.authfile + " file!")    
+  
     check_output_dir(args.output_dir, logger)
     check_output_dir(args.reports_dir, logger)
     check_output_dir(f'{args.output_dir}{os.path.sep}azure', logger)
@@ -214,9 +273,13 @@ def main(args=None, gui=False) -> None:
 
     logger.info("Goosey beginning to honk.")
     seconds = time.perf_counter()
-    asyncio.run(run(args, config, auth))
+    try:
+        asyncio.run(run(args, config, auth, auth_un_pw))
+    except RuntimeError as e:
+        sys.exit(1)
     elapsed = time.perf_counter() - seconds
     logger.info("Goosey executed in {0:0.2f} seconds.".format(elapsed))
 
 if __name__ == "__main__":
     main()
+

@@ -1,11 +1,9 @@
 *~
 output
 reports
-.conf
 build
 dist
 geckodriver.log
-.ugt_auth
 goosey.egg-info
 __pycache__
 token_cache.bin
@@ -14,5 +12,8 @@ token_cache.bin
 debug.log
 error.log
 .d4iot_conf
-.d4iot_auth
 .msgtrace_info
+*.aes
+*.auth*
+*_auth*
+*.conf*

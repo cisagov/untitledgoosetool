@@ -8,7 +8,7 @@ This module makes a nice GUI.
 from goosey.main import main as gooseymain
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 try:
     from gooey import Gooey, GooeyParser
