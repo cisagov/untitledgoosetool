@@ -203,10 +203,10 @@ def main(args=None, gui=False) -> None:
     encrypted_authfile = False
 
     dir_path = os.path.dirname(os.path.realpath(args.auth))
-    encrypted_auth = os.path.join(dir_path, self.auth + '.aes')
+    encrypted_auth = os.path.join(dir_path, args.auth + '.aes')
 
     dir_path = os.path.dirname(os.path.realpath(args.authfile))
-    encrypted_authfile = os.path.join(dir_path, self.authfile + '.aes')
+    encrypted_authfile = os.path.join(dir_path, args.authfile + '.aes')
 
     encrypted = False
 
