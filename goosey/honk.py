@@ -209,7 +209,8 @@ def main(args=None, gui=False) -> None:
     encrypted_authfile = os.path.join(dir_path, args.authfile + '.aes')
 
     encrypted = False
-
+    encrypted_ugtauth = False
+    
     if os.path.isfile(encrypted_auth):
         encrypted = True
         if encryption_pw is None:
