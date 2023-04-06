@@ -210,7 +210,7 @@ def main(args=None, gui=False) -> None:
 
     encrypted = False
     encrypted_ugtauth = False
-    
+
     if os.path.isfile(encrypted_auth):
         encrypted = True
         if encryption_pw is None:
@@ -218,7 +218,7 @@ def main(args=None, gui=False) -> None:
 
         pyAesCrypt.decryptFile(encrypted_auth, args.auth, encryption_pw)
         os.remove(encrypted_auth)
-        logger.debug("Decrypted the " + self.auth + " file!")
+        logger.debug("Decrypted the " + args.auth + " file!")
 
     try:
         if os.path.isfile(args.auth):
@@ -235,7 +235,7 @@ def main(args=None, gui=False) -> None:
         if os.path.isfile(args.auth):
             pyAesCrypt.encryptFile(args.auth, encrypted_auth, encryption_pw)
             os.remove(args.auth)
-            logger.debug("Encrypted the " + self.auth + " file!")              
+            logger.debug("Encrypted the " + args.auth + " file!")              
 
     if os.path.isfile(encrypted_authfile):
         encrypted_ugtauth = True
@@ -244,7 +244,7 @@ def main(args=None, gui=False) -> None:
 
         pyAesCrypt.decryptFile(encrypted_authfile, args.authfile, encryption_pw)
         os.remove(encrypted_authfile)
-        logger.debug("Decrypted the " + self.authfile + " file!")
+        logger.debug("Decrypted the " + args.authfile + " file!")
 
     if not os.path.isfile(args.authfile):
         logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
@@ -262,7 +262,7 @@ def main(args=None, gui=False) -> None:
         if os.path.isfile(args.authfile):
             pyAesCrypt.encryptFile(args.authfile, encrypted_authfile, encryption_pw)
             os.remove(args.authfile)
-            logger.debug("Encrypted the " + self.authfile + " file!")    
+            logger.debug("Encrypted the " + args.authfile + " file!")    
   
     check_output_dir(args.output_dir, logger)
     check_output_dir(args.reports_dir, logger)
