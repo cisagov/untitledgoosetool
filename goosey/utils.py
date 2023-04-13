@@ -18,7 +18,7 @@ from tracemalloc import start
 from logging import handlers
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 if sys.platform == 'win32':
     import msvcrt
@@ -255,7 +255,8 @@ async def get_nextlink(url, outfile, session, logger, auth):
                 skiptoken = url.split('skiptoken=')[1]
             elif '$skip' in url:
                 skiptoken = url.split('skip=')[1]
-            logger.debug('Getting nextLink %s' % (skiptoken))
+            if not skiptoken == '50':
+                logger.debug('Getting nextLink %s' % (skiptoken))
 
             header = {'Authorization': '%s %s' % (auth['token_type'], auth['access_token'])}
             async with session.get(url, headers=header, raise_for_status=True, timeout=600) as r2:
@@ -264,7 +265,8 @@ async def get_nextlink(url, outfile, session, logger, auth):
                     finalvalue = result2['value']
                 elif 'value' not in result2:
                     finalvalue = result2
-                logger.debug('Received nextLink %s' % (skiptoken))
+                if not skiptoken == '50':
+                    logger.debug('Received nextLink %s' % (skiptoken))
 
                 with open(outfile, 'a+', encoding='utf-8') as f:
                     f.write("\n".join([json.dumps(x) for x in finalvalue]) + '\n')
@@ -296,7 +298,7 @@ async def get_nextlink(url, outfile, session, logger, auth):
 
 async def helper_single_object(object, params, failurefile=None, retries=5) -> None:
         url, auth, logger, output_dir, session = params[0], params[1], params[2], params[3], params[4]
-        
+
         if 'token_type' not in auth or 'access_token' not in auth:
             logger.error(f"Missing token_type and access_token from auth. Did you auth correctly? (Skipping {object})")
             return
@@ -312,6 +314,7 @@ async def helper_single_object(object, params, failurefile=None, retries=5) -> N
             header = {'Authorization': '%s %s' % (auth['token_type'], auth['access_token'])}
             logger.info('Dumping %s information...' % (object))
             outfile = os.path.join(output_dir, name + '.json')
+
             async with session.get(url, headers=header, raise_for_status=True) as r:
                 result = await r.json()
                 nexturl = None
@@ -320,15 +323,17 @@ async def helper_single_object(object, params, failurefile=None, retries=5) -> N
                     if '@odata.context' in result:
                         if '@odata.type' in result:
                             result['value'].pop('@odata.type')
-                        with open(outfile, 'w', encoding='utf-8') as f:
-                            f.write(json.dumps(result) + '\n')
-                    if 'error' in result:
+                            with open(outfile, 'w', encoding='utf-8') as f:
+                                f.write(json.dumps(result) + '\n')
+                    elif 'error' in result:
                         if result['error']['code'] == 'InvalidAuthenticationToken':
                             return
                         elif result['error']['code'] == 'Unauthorized':
                             logger.error("Error with authentication token: " + result['error']['message'])
                             logger.error("Please re-auth.")
-                            sys.exit(1)
+                            return
+                        else:
+                            logger.error("Error: " + result['error']['message'])
                     else:
                         logger.debug("Error with result: {}".format(str(result)))
                         return
@@ -341,22 +346,28 @@ async def helper_single_object(object, params, failurefile=None, retries=5) -> N
                                 f.write(json.dumps(x) + '\n')
                     elif not result['value']:
                         logger.debug('%s has no information (size is 0). No output file.' % (outfile))
-                        if failurefile:
-                            with open(failurefile, 'a+', encoding='utf-8') as f:
-                                f.write(name + '\n')
+                        with open(failurefile, 'a+', encoding='utf-8') as f:
+                            f.write('No output file: ' + name + ' - ' + str((datetime.now())) + '\n')
                 if '@odata.nextLink' in result:
                     nexturl = result['@odata.nextLink']
                     await get_nextlink(nexturl, outfile, session, logger, auth)
         except Exception as e:
-            logger.error('Error on nextLink retrieval: {}'.format(str(e)))
             if e.status:
                 if e.status == 429:
                     logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
                     await asyncio.sleep(60)
                     retries -= 1
                 elif e.status == 401:
-                    logger.info('Unauthorized message received. Exiting calls.')
-                    sys.exit("Check auth to make sure it's not expired.")
+                    logger.error('Unauthorized message received. Exiting calls.')
+                    logger.error("Check auth to make sure it's not expired.")
+                    return
+                elif e.status == 400:
+                    logger.error('Error received on ' + str(object) + ': '  + str(e))
+                    with open(failurefile, 'a+', encoding='utf-8') as f:
+                        f.write('Error: ' + name + ' - ' + str((datetime.now())) + '\n')
+                    return
+            else:
+                logger.error('Error on nextLink retrieval: {}'.format(str(e)))
 
         logger.info('Finished dumping %s information.' % (object))
 

@@ -31,7 +31,7 @@ from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 class AzureDataDumper(DataDumper):
 

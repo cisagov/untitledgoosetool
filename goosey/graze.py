@@ -23,7 +23,7 @@ import pyAesCrypt
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 warnings.simplefilter('ignore')
 

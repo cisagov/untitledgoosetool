@@ -15,7 +15,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 class AzureAdDataDumper(DataDumper):
 
@@ -382,7 +382,6 @@ class AzureAdDataDumper(DataDumper):
                 result = await r.json()
                 if 'value' not in result:
                     if child == 'federationConfiguration':
-                        self.logger.debug("Error with result: {}".format(str(result)))
                         continue
                     if result['error']['code'] == 'InvalidAuthenticationToken':
                         self.logger.error("Error with authentication token: " + result['error']['message'])
@@ -451,9 +450,9 @@ class AzureAdDataDumper(DataDumper):
     
     async def dump_applications(self) -> None:
         await asyncio.gather(
-            helper_single_object('applications', self.call_object),
-            helper_single_object('directory/deleteditems/microsoft.graph.application', self.call_object),
-            helper_single_object('identityGovernance/appConsent/appConsentRequests', self.call_object),
+            helper_single_object('applications', self.call_object, self.failurefile),
+            helper_single_object('directory/deleteditems/microsoft.graph.application', self.call_object, self.failurefile),
+            helper_single_object('identityGovernance/appConsent/appConsentRequests', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='applications', child='extensionProperties'),
             self.helper_multiple_object(parent='applications', child='owners'),
             self.helper_multiple_object(parent='applications', child='tokenIssuancePolicies'),
@@ -463,95 +462,95 @@ class AzureAdDataDumper(DataDumper):
 
     async def dump_conditional_access(self) -> None:
         await asyncio.gather(
-            helper_single_object('conditionalAccess/authenticationContextClassReferences', self.call_object),
-            helper_single_object('conditionalAccess/namedLocations',self.call_object),
-            helper_single_object('conditionalAccess/policies', self.call_object)
+            helper_single_object('conditionalAccess/authenticationContextClassReferences', self.call_object, self.failurefile),
+            helper_single_object('conditionalAccess/namedLocations',self.call_object, self.failurefile),
+            helper_single_object('conditionalAccess/policies', self.call_object, self.failurefile)
         )
 
     async def dump_devices(self) -> None:
         await asyncio.gather(
-            helper_single_object('devices', self.call_object),
+            helper_single_object('devices', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='users', child='registeredDevices')
         )
 
     async def dump_directory_roles(self) -> None:
         await asyncio.gather(
-            helper_single_object('directoryRoles', self.call_object),
-            helper_single_object('roleManagement/directory/roleDefinitions', self.call_object),
-            helper_single_object('roleManagement/directory/roleAssignmentSchedules', self.call_object),
-            helper_single_object('roleManagement/directory/roleEligibilitySchedules', self.call_object),
-            helper_single_object('roleManagement/directory/roleEligibilityScheduleInstances', self.call_object),
+            helper_single_object('directoryRoles', self.call_object, self.failurefile),
+            helper_single_object('roleManagement/directory/roleDefinitions', self.call_object, self.failurefile),
+            helper_single_object('roleManagement/directory/roleAssignmentSchedules', self.call_object, self.failurefile),
+            helper_single_object('roleManagement/directory/roleEligibilitySchedules', self.call_object, self.failurefile),
+            helper_single_object('roleManagement/directory/roleEligibilityScheduleInstances', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='directoryRoles', child='members')
         )
 
     async def dump_groups(self) -> None:
         await asyncio.gather(
-            helper_single_object('groups', self.call_object),
-            helper_single_object('directory/deleteditems/microsoft.graph.group', self.call_object),
+            helper_single_object('groups', self.call_object, self.failurefile),
+            helper_single_object('directory/deleteditems/microsoft.graph.group', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='groups', child='appRoleAssignments')
         )
 
     async def dump_identity_provider(self) -> None:
         await asyncio.gather(
-            helper_single_object('identity/identityProviders', self.call_object),
-            helper_single_object('identity/identityProviders/availableProviderTypes', self.call_object),
-            helper_single_object('identity/apiConnectors', self.call_object),
+            helper_single_object('identity/identityProviders', self.call_object, self.failurefile),
+            helper_single_object('identity/identityProviders/availableProviderTypes', self.call_object, self.failurefile),
+            helper_single_object('identity/apiConnectors', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='users', child='authentication/methods')
         )       
 
     async def dump_organization(self) -> None:
         await asyncio.gather(
-            helper_single_object('directorySettingTemplates', self.call_object),
-            helper_single_object('directory/federationConfigurations/graph.samlOrWsFedExternalDomainFederation', self.call_object),
-            helper_single_object('domains', self.call_object),
+            helper_single_object('directorySettingTemplates', self.call_object, self.failurefile),
+            helper_single_object('directory/federationConfigurations/graph.samlOrWsFedExternalDomainFederation', self.call_object, self.failurefile),
+            helper_single_object('domains', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='domains', child='federationConfiguration'),
-            helper_single_object('organization', self.call_object),
-            helper_single_object('subscribedSkus', self.call_object)
+            helper_single_object('organization', self.call_object, self.failurefile),
+            helper_single_object('subscribedSkus', self.call_object, self.failurefile)
         )
 
     async def dump_policies(self) -> None:
         await asyncio.gather(
-            helper_single_object('identity/continuousAccessEvaluationPolicy', self.call_object),
-            helper_single_object('identity/events/onSignupStart', self.call_object),
-            helper_single_object('policies/activityBasedTimeoutPolicies', self.call_object),
-            helper_single_object('policies/defaultAppManagementPolicy', self.call_object),
-            helper_single_object('policies/tokenLifetimePolicies', self.call_object),
-            helper_single_object('policies/tokenIssuancePolicies', self.call_object),
-            helper_single_object('policies/authenticationFlowsPolicy', self.call_object),
-            helper_single_object('policies/authenticationMethodsPolicy', self.call_object),
-            helper_single_object('policies/authorizationPolicy', self.call_object),
-            helper_single_object('policies/claimsMappingPolicies', self.call_object),
-            helper_single_object('policies/homeRealmDiscoveryPolicies', self.call_object),
-            helper_single_object('policies/permissionGrantPolicies', self.call_object),
-            helper_single_object('policies/identitySecurityDefaultsEnforcementPolicy', self.call_object),
-            helper_single_object('policies/accessReviewPolicy', self.call_object),
-            helper_single_object('policies/adminConsentRequestPolicy', self.call_object)
+            helper_single_object('identity/continuousAccessEvaluationPolicy', self.call_object, self.failurefile),
+            helper_single_object('identity/events/onSignupStart', self.call_object, self.failurefile),
+            helper_single_object('policies/activityBasedTimeoutPolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/defaultAppManagementPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/tokenLifetimePolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/tokenIssuancePolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/authenticationFlowsPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/authenticationMethodsPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/authorizationPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/claimsMappingPolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/homeRealmDiscoveryPolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/permissionGrantPolicies', self.call_object, self.failurefile),
+            helper_single_object('policies/identitySecurityDefaultsEnforcementPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/accessReviewPolicy', self.call_object, self.failurefile),
+            helper_single_object('policies/adminConsentRequestPolicy', self.call_object, self.failurefile)
         )
 
     async def dump_risk_detections(self) -> None:
         await asyncio.gather(
-            helper_single_object('identityProtection/riskDetections', self.call_object),
-            helper_single_object('identityProtection/servicePrincipalRiskDetections', self.call_object)
+            helper_single_object('identityProtection/riskDetections', self.call_object, self.failurefile),
+            helper_single_object('identityProtection/servicePrincipalRiskDetections', self.call_object, self.failurefile)
         )
 
     async def dump_risky_objects(self) -> None:
         await asyncio.gather(
-            helper_single_object('identityProtection/riskyUsers', self.call_object),
-            helper_single_object('identityProtection/riskyServicePrincipals', self.call_object),
+            helper_single_object('identityProtection/riskyUsers', self.call_object, self.failurefile),
+            helper_single_object('identityProtection/riskyServicePrincipals', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='riskyUsers', child='history'),
             self.helper_multiple_object(parent='identityProtection/riskyServicePrincipals', child='history')
         )
 
     async def dump_security(self) -> None:
         await asyncio.gather(
-            helper_single_object('security/securityActions', self.call_object),
-            helper_single_object('security/alerts', self.call_object),
-            helper_single_object('security/secureScores', self.call_object)
+            helper_single_object('security/securityActions', self.call_object, self.failurefile),
+            helper_single_object('security/alerts', self.call_object, self.failurefile),
+            helper_single_object('security/secureScores', self.call_object, self.failurefile)
         )
 
     async def dump_service_principals(self) -> None:
         await asyncio.gather(
-            helper_single_object('servicePrincipals', self.call_object),
+            helper_single_object('servicePrincipals', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='servicePrincipals', child='appRoleAssignments'),
             self.helper_multiple_object(parent='servicePrincipals', child='appRoleAssignedTo'),
             self.helper_multiple_object(parent='servicePrincipals', child='owners'),
@@ -569,20 +568,20 @@ class AzureAdDataDumper(DataDumper):
 
     async def dump_summaries(self) -> None:
         await asyncio.gather(
-            helper_single_object("reports/getRelyingPartyDetailedSummary(period='D30')", self.call_object),
-            helper_single_object("reports/getAzureADApplicationSignInSummary(period='D30')", self.call_object),
-            helper_single_object('reports/applicationSignInDetailedSummary', self.call_object),
-            helper_single_object("reports/getCredentialUsageSummary(period='D30')", self.call_object),
-            helper_single_object("reports/getCredentialUserRegistrationCount", self.call_object),
-            helper_single_object("reports/credentialUserRegistrationDetails", self.call_object),
-            helper_single_object("reports/userCredentialUsageDetails", self.call_object),
+            helper_single_object("reports/getRelyingPartyDetailedSummary(period='D30')", self.call_object, self.failurefile),
+            helper_single_object("reports/getAzureADApplicationSignInSummary(period='D30')", self.call_object, self.failurefile),
+            helper_single_object('reports/applicationSignInDetailedSummary', self.call_object, self.failurefile),
+            helper_single_object("reports/getCredentialUsageSummary(period='D30')", self.call_object, self.failurefile),
+            helper_single_object("reports/getCredentialUserRegistrationCount", self.call_object, self.failurefile),
+            helper_single_object("reports/credentialUserRegistrationDetails", self.call_object, self.failurefile),
+            helper_single_object("reports/userCredentialUsageDetails", self.call_object, self.failurefile),
         )
 
     async def dump_users(self) -> None:
         await asyncio.gather(
-            helper_single_object('users', self.call_object),
-            helper_single_object('contacts', self.call_object),
-            helper_single_object('oauth2PermissionGrants', self.call_object),
-            helper_single_object('directory/deletedItems/microsoft.graph.user', self.call_object),
+            helper_single_object('users', self.call_object, self.failurefile),
+            helper_single_object('contacts', self.call_object, self.failurefile),
+            helper_single_object('oauth2PermissionGrants', self.call_object, self.failurefile),
+            helper_single_object('directory/deletedItems/microsoft.graph.user', self.call_object, self.failurefile),
             self.helper_multiple_object(parent='users', child='appRoleAssignments')
         )

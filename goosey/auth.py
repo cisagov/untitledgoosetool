@@ -27,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 green = "\x1b[1;32m"
 
@@ -179,6 +179,15 @@ class Authentication():
             except Exception as e:
                 pass
 
+            try:
+                browser.implicitly_wait(30)
+                if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                    self.logger.info("The MFA request was not approved in time.")
+                    browser.quit()
+                    sys.exit(1)
+            except Exception as e:
+                pass
+            
             # Wait for AAD PowerShell prompt
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
@@ -292,6 +301,15 @@ class Authentication():
                     except Exception as e:
                         pass    
 
+                    try:
+                        browser.implicitly_wait(30)
+                        if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                            self.logger.info("The MFA request was not approved in time.")
+                            browser.quit()
+                            sys.exit(1)
+                    except Exception as e:
+                        pass
+
                     # Switch to second tab
                     browser.execute_script("window.open('');")
                     browser.switch_to.window(browser.window_handles[1])
@@ -349,19 +367,42 @@ class Authentication():
                             WebDriverWait(browser, 20).until(EC.url_matches('https://security.microsoft.us/auditlogsearch'))
                         except Exception as e:
                             pass
-
-                    self.tokendata['sessionId'] = browser.get_cookie('s.SessID').get('value')
-                    self.tokendata['sccauth'] = browser.get_cookie('sccauth').get('value')
-                    self.tokendata['xsrf'] = browser.get_cookie('XSRF-TOKEN').get('value')
+                    try:
+                        cookie_str = 'Session ID cookie - security.microsoft.com/auditlogsearch'
+                        if browser.get_cookie('s.SessID').get('value'):
+                            self.tokendata['sessionId'] = browser.get_cookie('s.SessID').get('value')
+                    except Exception as e:
+                        self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
+                    try:                            
+                        cookie_str = 'sccauth cookie - security.microsoft.com/auditlogsearch'    
+                        if browser.get_cookie('sccauth').get('value'):
+                            self.tokendata['sccauth'] = browser.get_cookie('sccauth').get('value')
+                    except Exception as e:
+                        self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
+                    try:
+                        cookie_str = 'XSRF-TOKEN - security.microsoft.com/auditlogsearch'        
+                        if browser.get_cookie('XSRF-TOKEN').get('value'):
+                            self.tokendata['xsrf'] = browser.get_cookie('XSRF-TOKEN').get('value')
+                    except Exception as e:
+                        self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
+                    
                     self.logger.info('First tab: Obtained audit log cookies.')
 
                     browser.switch_to.window(browser.window_handles[2])
 
-                    self.tokendata['.AspNet.Cookies'] = browser.get_cookie('.AspNet.Cookies').get('value')
+                    try:
+                        cookie_str = '.AspNet cookie - admin.exchange.microsoft.com'
+                        if browser.get_cookie('.AspNet.Cookies').get('value'):
+                            self.tokendata['.AspNet.Cookies'] = browser.get_cookie('.AspNet.Cookies').get('value')
+                    except Exception as e:
+                        self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
 
                     for request in browser.requests:
                         if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
-                            self.tokendata['validationkey'] = request.headers['validationkey']     
+                            self.tokendata['validationkey'] = request.headers['validationkey']
+
+                    if not self.tokendata['validationkey']:
+                        self.logger.error("Error obtaining validationkey.")
 
                     self.logger.info("Third tab: Obtained Exchange cookies.")               
 
@@ -378,8 +419,19 @@ class Authentication():
                                 self.logger.info('No longer waiting for exchange cookies. Closing.')
                                 done = True
                         else:
-                            self.tokendata['msExchEcpCanary'] = browser.get_cookie('msExchEcpCanary').get('value')
-                            self.tokendata['OpenIdConnect.token.v1'] = browser.get_cookie('OpenIdConnect.token.v1').get('value')
+                            try:
+                                cookie_str = 'msExchEcpCanary cookie - outlook.office365.com/ecp'
+                                if browser.get_cookie('msExchEcpCanary').get('value'):
+                                    self.tokendata['msExchEcpCanary'] = browser.get_cookie('msExchEcpCanary').get('value')
+                            except Exception as e:
+                                self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
+                            try:
+                                cookie_str = 'OpenIdConnect.token.v1 cookie - outlook.office365.com/ecp'
+                                if browser.get_cookie('OpenIdConnect.token.v1').get('value'):
+                                    self.tokendata['OpenIdConnect.token.v1'] = browser.get_cookie('OpenIdConnect.token.v1').get('value')
+                            except Exception as e:
+                                self.logger.error("Error obtaining " + cookie_str + ": " + str(e))    
+                                                        
                             self.logger.info('Second tab: Exchange Control Panel cookies acquired.')
                             done = True
                     result = True
@@ -624,7 +676,7 @@ class Authentication():
             self.auth_device_selenium = True 
             
             self.authenticate_mfa_interactive()
-       
+            
         custom_auth_dict['sdk_auth']['tenant_id'] = self.tenant 
         custom_auth_dict['sdk_auth']['app_id'] = self.app_client_id
         custom_auth_dict['sdk_auth']['client_secret'] = self.client_secret         
@@ -641,6 +693,10 @@ class Authentication():
 
             # Clear out our token data
             self.tokendata = None
+
+        if not custom_auth_dict['mfa'][uri]['access_token']:
+            self.logger.error("MFA did not complete successfully. Re-authentication is required.")
+            sys.exit(1)
 
         resource_uri = self.get_app_resource_uri()
         for uri in resource_uri:
