@@ -275,7 +275,8 @@ class M365DataDumper(DataDumper):
                 with open(outfile, 'a', encoding="utf-8") as f:
                     if result:
                         result.update(y)
-                        del result['@odata.context']
+                        if '@odata.context' in result.keys():
+                            del result['@odata.context']
                         f.write(json.dumps(result))
                         f.write("\n")
         
@@ -301,7 +302,8 @@ class M365DataDumper(DataDumper):
                 with open(outfile, 'a', encoding="utf-8") as f:
                     if result:
                         result.update(y)
-                        del result['@odata.context']
+                        if '@odata.context' in result.keys():
+                            del result['@odata.context']
                         f.write(json.dumps(result))
                         f.write("\n")
         
