@@ -11,7 +11,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 end_29_days_ago = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
 today_date = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -30,28 +30,28 @@ class MDEDataDumper(DataDumper):
         return "https://api-us.securitycenter.windows.com/"
 
     async def dump_machines(self) -> None:
-        await helper_single_object("api/machines", self.call_object)
+        await helper_single_object("api/machines", self.call_object, self.failurefile)
 
     async def dump_alerts(self) -> None:
-        await helper_single_object("api/alerts", self.call_object)
+        await helper_single_object("api/alerts", self.call_object, self.failurefile)
 
     async def dump_indicators(self) -> None:
-        await helper_single_object("api/indicators", self.call_object)
+        await helper_single_object("api/indicators", self.call_object, self.failurefile)
 
     async def dump_investigations(self) -> None:
-        await helper_single_object("api/investigations", self.call_object)
+        await helper_single_object("api/investigations", self.call_object, self.failurefile)
 
     async def dump_library_files(self) -> None:
-        await helper_single_object("api/libraryfiles", self.call_object)
+        await helper_single_object("api/libraryfiles", self.call_object, self.failurefile)
     
     async def dump_machine_vulns(self) -> None:
-        await helper_single_object("api/vulnerabilities/machinesVulnerabilities", self.call_object)
+        await helper_single_object("api/vulnerabilities/machinesVulnerabilities", self.call_object, self.failurefile)
 
     async def dump_software(self) -> None:
-        await helper_single_object("api/Software", self.call_object)
+        await helper_single_object("api/Software", self.call_object, self.failurefile)
 
     async def dump_recommendations(self) -> None:
-        await helper_single_object("api/recommendations", self.call_object)
+        await helper_single_object("api/recommendations", self.call_object, self.failurefile)
     
     
     async def check_machines(self):

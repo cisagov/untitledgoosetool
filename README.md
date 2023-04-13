@@ -45,11 +45,13 @@ For more guidance on how to use Untitled Goose Tool, please see: [Untitled Goose
 ## Getting Started
 
 ### Prerequisites
-Python 3.7, 3.8, 3.9, or 3.10 is required to run Untitled Goose Tool with Python.
+Python 3.7, 3.8, 3.9, or 3.10 (up to 3.10.10) is required to run Untitled Goose Tool with Python. Python 3.10.11 is currently being tested.
 
 Firefox is required for authenticating with Untitled Goose Tool.
 
 Currently, the only MFA method accepted in Untitled Goose Tool is the push notification offered by the Microsoft Authenticator app.
+
+On a Windows machine, you will need to make sure to have the Microsoft Visual C++ redistributable package (14.x) installed prior to running the tool.
 
 It's also recommended to run Untitled Goose Tool within a virtual environment.
 

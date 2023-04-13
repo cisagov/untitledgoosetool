@@ -35,7 +35,7 @@ goosey messagetrace
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 def main():
     # Primary argument parser

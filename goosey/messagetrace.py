@@ -40,7 +40,7 @@ goosey messagetrace --gather-report
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 logger = None
 encryption_pw = None

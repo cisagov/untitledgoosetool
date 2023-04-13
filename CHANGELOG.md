@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - The goose is loose - 2023-04-12
+### Added
+- Readme prerequisites regarding Microsoft Visual C++ redistributable package (14.x) for Windows machines
+
+### Changed
+- Updated selenium logic regarding push notification MFA prompts. It will detect if MFA was never accepted and exit.
+
+### Fixed
+- Implemented more checks for the .ugt_file to see if cookies and tokens are correctly exported.
+- Updated certain AzureAD call outputs, making it easier for users to track call results.
+
 ## [1.1.0] - The goose is loose - 2023-04-05
 ### Added
 - Implemented file encryption for credential file(s) with the `--secure` parameter.

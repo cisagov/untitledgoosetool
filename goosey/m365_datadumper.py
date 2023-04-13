@@ -23,7 +23,7 @@ from goosey.utils import *
 from io import StringIO
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 class M365DataDumper(DataDumper):
 
@@ -32,6 +32,7 @@ class M365DataDumper(DataDumper):
         self.logger = setup_logger(__name__, debug)    
         self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.inboxfailfile = os.path.join(reports_dir, '_user_inbox_503.json')
+        self.failurefile = os.path.join(reports_dir, '_no_results.json')
         filters = config_get(config, 'filters', '', logger=self.logger)
         if filters != '' and  filters is not None:
             self.date_range=True
@@ -358,7 +359,7 @@ class M365DataDumper(DataDumper):
         if os.path.exists(outfile):
             data = [json.loads(line) for line in open (outfile, 'r')]
         else:
-            await helper_single_object('users', self.call_object)
+            await helper_single_object('users', self.call_object, self.failurefile)
             data = [json.loads(line) for line in open (outfile, 'r')]
 
         statefile = f'{self.output_dir}{os.path.sep}.inbox_state'
