@@ -227,6 +227,9 @@ class AzureAdDataDumper(DataDumper):
                 '$filter': filters,
             }
 
+            self.logger.debug(f'Dumping AzureAD audit logs for time frame {start} to {end_time}')
+
+            success = False
             for counter in range (retries):
                 try:
                     header = {'Authorization': '%s %s' % (self.app_auth['token_type'], self.app_auth['access_token'])}
@@ -241,6 +244,8 @@ class AzureAdDataDumper(DataDumper):
                                 with open(outfile, 'w', encoding='utf-8') as f:
                                     f.write("\n".join([json.dumps(x) for x in result['value']]) + '\n')
                             start = '%sT00:00:00.000000Z' % ((datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date() + timedelta(days=1)).strftime("%Y-%m-%d"))
+                            # We need to end the retry loop if we successfully dumped the audit log data
+                            success = True
                         if 'error' in result:
                             if result['error']['code'] == 'InvalidAuthenticationToken':
                                 self.logger.error("Error with authentication token: " + result['error']['message'])
@@ -251,10 +256,13 @@ class AzureAdDataDumper(DataDumper):
                                 self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
                                 await asyncio.sleep(60)
                                 retries -=1
-                        
+
                         with open(statefile, 'w') as f:
                             f.write("time\n")
                             f.write(end_time)
+
+                        if success:
+                            break
 
 
                 except Exception as e:
