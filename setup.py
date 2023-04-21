@@ -6,7 +6,7 @@ elif sys.version_info >= (3,11):
 
 from setuptools import setup
 setup(name='goosey',
-      version='1.1.1',
+      version='1.2.0',
       description='AzureAD, Azure and M365 Data Collector',
       author='Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace',
       classifiers=[

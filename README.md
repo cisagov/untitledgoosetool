@@ -431,6 +431,8 @@ To enable specific pulls, you can change occurrences of `False` to `True` (case 
 ### GUI
 There is a simplified GUI based off of [Gooey](https://github.com/chriskiehl/Gooey). Note that colorings may be a bit off when you run.
 
+Note: When you run `goosey-gui` and you use either app OTP or SMS OTP, you should make sure to keep an eye on the terminal that you used to launch `goosey-gui` with. It will prompt you for the OTP codes there and not in the GUI.
+
 To run with GUI:
 ```sh
 $ goosey-gui

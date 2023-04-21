@@ -40,7 +40,7 @@ goosey messagetrace --gather-report
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 logger = None
 encryption_pw = None
@@ -54,7 +54,7 @@ class MessageTrace():
         self.auth = auth
         self.msgfile = f'{self.output_dir}{os.path.sep}.msgtrace_info'
         self.jobid = None
-        self.headless = False
+        self.headless = args.interactive
     
     def parse_config(self, configfile):
 
@@ -113,7 +113,6 @@ class MessageTrace():
             'DeliveryStatus': "",
             'Direction': self.direction,
             'EndDate': date_now,
-            'MessageID': self.messageid,
             'OriginalClientIP': self.originalclientip,
             'RecipientAddress': self.recipientaddress,
             'ReportTitle': ReportName,
@@ -226,7 +225,7 @@ class MessageTrace():
 
         self.parse_config(args.config)
 
-        self.username = input("Please type your username: ")
+        self.username = getpass.getpass("Please type your username: ")
         self.password = getpass.getpass("Please type your password: ")
 
         self.logger.info('Attempting to automatically auth as an user. You may have to accept MFA prompts.')
@@ -378,9 +377,7 @@ def main(args=None) -> None:
         args = parser.parse_args()
 
     logger = setup_logger(__name__, args.debug)
-    
-    self.headless = not args.interactive
-    
+       
     auth = {}
 
     encrypted_ugtauth = False
