@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - The goose is loose - 2023-04-21
+### Added
+- Implemented delegated application authentication.
+- Implemented support for more MFA methods: number matching push notification, app OTP code, and SMS OTP code.
+
+### Changed
+- Added more debugging statements for `goosey auth --debug`.
+
+### Fixed
+- Implemented monkey patch for `goosey-gui` on Windows machines.
+- Fixed logic for errorneous token check when `m365` in the `.conf` was set to `False`.
+
 ## [1.1.1] - The goose is loose - 2023-04-12
 ### Added
 - Readme prerequisites regarding Microsoft Visual C++ redistributable package (14.x) for Windows machines

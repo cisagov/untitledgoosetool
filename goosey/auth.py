@@ -27,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 green = "\x1b[1;32m"
 
@@ -36,7 +36,6 @@ class Authentication():
     Authentication class for Untitled Goose Tool
     """
     def __init__(self, debug=False):
-        self.client_id = '1b730954-1685-4b74-9bfd-dac224a7b894'
         self.resource_uri = 'https://graph.microsoft.com/.default'
         self.tokendata = {}
         self.headless = False
@@ -111,7 +110,7 @@ class Authentication():
         resource_uri = self.get_mfa_resource_uri()
         self.logger.debug(f"Device code selenium resource uri: {str(resource_uri)}")
 
-        context = msal.PublicClientApplication(client_id=self.client_id, authority=authority_host_uri)
+        context = msal.PublicClientApplication(client_id=self.app_client_id, authority=authority_host_uri)
         code = context.initiate_device_flow(scopes=[resource_uri])
 
         self.logger.info('Attempting to automatically auth via device code. You may have to accept MFA prompts.')
@@ -136,62 +135,130 @@ class Authentication():
 
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
+            self.logger.debug("Device code authentication - Device code entered.")
+
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
 
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
+            self.logger.debug("Device code authentication - Username entered.")
+
+            time.sleep(1)
+
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'usernameError')))
                 browser.quit()
-                sys.exit("Incorrect username. Please correct it and try again.")  
+                sys.exit("Device code authentication - Incorrect username. Please correct it and try again.")  
             except Exception as e:
-                pass                  
-                
+                pass                            
+
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
 
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
            
+            self.logger.debug("Device code authentication - Password entered.")
+
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
                 browser.quit()
-                sys.exit("Incorrect password. Please correct it and try again.")  
+                sys.exit("Device code authentication - Incorrect password. Please correct it and try again.")  
             except Exception as e:
                 pass    
             
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'idDiv_SAASDS_Title')))
                 browser.quit()
-                sys.exit("Declined MFA. Please correct it and try again.")  
+                sys.exit("Device code authentication - Declined MFA. Please correct it and try again.")  
             except Exception as e:
                 pass    
 
             try:
                 WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
                 browser.quit()
-                sys.exit("Password reset required. Change your password and try again.")
+                sys.exit("Device code authentication - Password reset required. Change your password and try again.")
             except Exception as e:
                 pass
 
             try:
                 if "Your organization needs more information to keep your account secure" in browser.find_element(By.ID, "ProofUpDescription").text:
                     browser.quit()
-                    sys.exit("Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
+                    sys.exit("Device code authentication - Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
             except Exception as e:
                 pass
 
             try:
-                browser.implicitly_wait(30)
                 if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
-                    self.logger.info("The MFA request was not approved in time.")
-                    browser.quit()
-                    sys.exit(1)
+                    self.logger.debug("Device code authentication - Push notification MFA detected.")
+
+                    if browser.find_element(By.ID, "idRichContext_DisplaySign"):
+                        self.logger.debug("Device code authentication - Number matching MFA detected.")
+                        mfa_code = browser.find_element(By.ID, "idRichContext_DisplaySign").text
+                        self.logger.info("Device code authentication - Your MFA code is: " + str(mfa_code))
+                        time.sleep(10)
+
+                    time.sleep(20)
+
+                    if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                        self.logger.info("Device code authentication - The MFA request was not approved in time.")
+                        browser.quit()
+                        sys.exit(1)                        
             except Exception as e:
                 pass
-            
+
+            try:
+                if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                    self.logger.debug("Device code authentication - OTP MFA detected.")
+
+                    if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                        OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                        OTP_code = getpass.getpass("Device code authentication - Please type your OTP code: ")
+                        verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                        WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                        WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                    
+                    if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                        errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                        self.logger.error("Device code authentication - OTP error message: " + errormsg)
+                        browser.quit()
+                        sys.exit("Device code authentication - MFA failed. Please see OTP error message and try again.")                    
+            except Exception as e:
+                pass
+
+            try:
+                if "Verify your identity" in browser.find_element(By.ID, "idDiv_SAOTCS_Title").text:
+                    self.logger.debug("Device code authentication - Other MFA detected.")
+
+                    if "Text" in browser.find_element(By.ID, "idDiv_SAOTCS_Proofs_Section").text:
+                        self.logger.debug("Device code authentication - Text option found.")
+                        sms = (By.ID, "idDiv_SAOTCS_Proofs_Section")
+                        WebDriverWait(browser, 60).until(EC.element_to_be_clickable(sms)).click()
+                        self.logger.debug("Device code authentication - SMS OTP requested.")
+                        time.sleep(10)
+
+                        if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                            self.logger.debug("Device code authentication - SMS OTP MFA detected.")
+
+                            if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                                OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                                OTP_code = getpass.getpass("Device code authentication - Please type your OTP code: ")
+                                verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                            
+                            if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                                errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                                self.logger.error("Device code authentication - OTP error message: " + errormsg)
+                                browser.quit()
+                                sys.exit("Device code authentication - MFA failed. Please see OTP error message and try again.")                          
+            except Exception as e:
+                pass
+
             # Wait for AAD PowerShell prompt
             WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
-            WebDriverWait(browser, 60).until(EC.text_to_be_present_in_element((By.ID, "message"), "You have signed in to the Azure Active Directory PowerShell application on your device. You may now close this window."))
+            WebDriverWait(browser, 60).until(EC.text_to_be_present_in_element((By.ID, "message"), "You may now close this window."))
         except Exception as e:
             return False
 
@@ -262,10 +329,13 @@ class Authentication():
                     
                     WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
+                    self.logger.debug("M365 user authentication - Username entered.")
+                    time.sleep(1)
+
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'usernameError')))
                         browser.quit()
-                        sys.exit("Incorrect username. Please correct it and try again.")  
+                        sys.exit("M365 user authentication - Incorrect username. Please correct it and try again.")  
                     except Exception as e:
                         pass     
 
@@ -273,42 +343,106 @@ class Authentication():
                     
                     WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
 
+                    self.logger.debug("M365 user authentication - Password entered.")
+
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
                         browser.quit()
-                        sys.exit("Incorrect password. Please correct it and try again.")  
+                        sys.exit("M365 user authentication - Incorrect password. Please correct it and try again.")  
                     except Exception as e:
                         pass    
                 
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
                         browser.quit()
-                        sys.exit("Password reset required. Change your password and try again.")
+                        sys.exit("M365 user authentication - Password reset required. Change your password and try again.")
                     except Exception as e:
                         pass
 
                     try:
                         WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'idDiv_SAASDS_Title')))
                         browser.quit()
-                        sys.exit("Declined MFA. Please correct it and try again.") 
+                        sys.exit("M365 user authentication - Declined MFA. Please correct it and try again.") 
                     except Exception as e:
                         pass
 
                     try:
                         if "Your organization needs more information to keep your account secure" in browser.find_element(By.ID, "ProofUpDescription").text:
                             browser.quit()
-                            sys.exit("Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
+                            sys.exit("M365 user authentication - Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
                     except Exception as e:
                         pass    
 
                     try:
-                        browser.implicitly_wait(30)
                         if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
-                            self.logger.info("The MFA request was not approved in time.")
-                            browser.quit()
-                            sys.exit(1)
+                            self.logger.debug("M365 user authentication - Push notification MFA detected.")
+
+                            if browser.find_element(By.ID, "idRichContext_DisplaySign"):
+                                self.logger.debug("M365 user authentication - Number matching MFA detected.")
+                                mfa_code = browser.find_element(By.ID, "idRichContext_DisplaySign").text
+                                self.logger.info("M365 user authentication - Your MFA code is: " + str(mfa_code))
+                                time.sleep(10)
+
+                            time.sleep(20)
+
+                            if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                                self.logger.info("M365 user authentication - The MFA request was not approved in time.")
+                                browser.quit()
+                                sys.exit(1)                        
                     except Exception as e:
                         pass
+
+                    try:
+                        if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                            self.logger.debug("M365 user authentication - OTP MFA detected.")
+
+                            if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                                OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                                OTP_code = getpass.getpass("M365 user authentication - Please type your OTP code: ")
+                                verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                            
+                            if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                                errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                                self.logger.error("M365 user authentication - OTP error message: " + errormsg)
+                                browser.quit()
+                                sys.exit("M365 user authentication - MFA failed. Please see OTP error message and try again.")                    
+                    except Exception as e:
+                        pass
+
+                    try:
+                        if "Verify your identity" in browser.find_element(By.ID, "idDiv_SAOTCS_Title").text:
+                            self.logger.debug("M365 user authentication - Other MFA detected.")
+
+                            if "Text" in browser.find_element(By.ID, "idDiv_SAOTCS_Proofs_Section").text:
+                                self.logger.debug("M365 user authentication - Text option found.")
+                                sms = (By.ID, "idDiv_SAOTCS_Proofs_Section")
+                                WebDriverWait(browser, 60).until(EC.element_to_be_clickable(sms)).click()
+                                self.logger.debug("M365 user authentication - SMS OTP requested.")
+                                time.sleep(10)
+
+                                if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                                    self.logger.debug("M365 user authentication - SMS OTP MFA detected.")
+
+                                    if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                                        OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                                        OTP_code = getpass.getpass("M365 user authentication - Please type your OTP code: ")
+                                        verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                                        WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                                        WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                                    
+                                    if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                                        errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                                        self.logger.error("M365 user authentication - OTP error message: " + errormsg)
+                                        browser.quit()
+                                        sys.exit("M365 user authentication - MFA failed. Please see OTP error message and try again.")                          
+                    except Exception as e:
+                        pass
+
+                    time.sleep(5)
 
                     # Switch to second tab
                     browser.execute_script("window.open('');")
@@ -527,7 +661,7 @@ class Authentication():
             if config_get(auth, 'auth', 'username', self.logger):
                 self.username = config_get(auth, 'auth', 'username', self.logger)
             else:
-                self.username = input("Please type your username: ")
+                self.username = getpass.getpass("Please type your username: ")
             if config_get(auth, 'auth', 'password', self.logger):
                 self.password = config_get(auth, 'auth', 'password', self.logger)
             else:
@@ -536,7 +670,7 @@ class Authentication():
                 if config_get(auth, 'auth', 'appid', self.logger):
                     self.app_client_id = config_get(auth, 'auth', 'appid', self.logger)
                 else:
-                    self.app_client_id = input("Please type your application client id: ")
+                    self.app_client_id = getpass.getpass("Please type your application client id: ")
                 if config_get(auth, 'auth', 'clientsecret', self.logger):
                     self.client_secret = config_get(auth, 'auth', 'clientsecret', self.logger)
                 else:
@@ -553,10 +687,10 @@ class Authentication():
                     self.d4iot_mgmt_token = getpass.getpass("Please type your D4IOT management console token: ")
 
         else:
-            self.username = input("Please type your username: ")
+            self.username = getpass.getpass("Please type your username: ")
             self.password = getpass.getpass("Please type your password: ")
             if not self.d4iot:
-                self.app_client_id = input("Please type your application client id: ")
+                self.app_client_id = getpass.getpass("Please type your application client id: ")
                 self.client_secret = getpass.getpass("Please type your client secret: ")
             else:
                 self.d4iot_sensor_token = getpass.getpass("Please type your D4IOT sensor token: ")
@@ -694,9 +828,10 @@ class Authentication():
             # Clear out our token data
             self.tokendata = None
 
-        if not custom_auth_dict['mfa'][uri]['access_token']:
-            self.logger.error("MFA did not complete successfully. Re-authentication is required.")
-            sys.exit(1)
+        if self.m365 == "True":
+            if not custom_auth_dict['mfa'][uri]['access_token']:
+                self.logger.error("MFA did not complete successfully. Re-authentication is required.")
+                sys.exit(1)
 
         resource_uri = self.get_app_resource_uri()
         for uri in resource_uri:
