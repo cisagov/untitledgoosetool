@@ -49,7 +49,7 @@ Python 3.7, 3.8, 3.9, or 3.10 (up to 3.10.10) is required to run Untitled Goose 
 
 Firefox is required for authenticating with Untitled Goose Tool.
 
-Currently, the only MFA method accepted in Untitled Goose Tool is the push notification offered by the Microsoft Authenticator app.
+Currently, the following MFA methods are accepted in Untitled Goose Tool: the push notification offered by the Microsoft Authenticator app, number matching MFA, and one-time password (OTP) from either the Microsoft Authenticator app or SMS.
 
 On a Windows machine, you will need to make sure to have the Microsoft Visual C++ redistributable package (14.x) installed prior to running the tool.
 
