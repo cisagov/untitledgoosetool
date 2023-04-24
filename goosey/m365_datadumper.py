@@ -456,7 +456,6 @@ class M365DataDumper(DataDumper):
 
         ual_filename = 'ual_%s.csv' % (postfix)
         json_filename = 'ual_%s.json' % (postfix)
-        data_json = []
         end_ret = ''
         try:
             headers = {
@@ -505,14 +504,12 @@ class M365DataDumper(DataDumper):
                         
                             csvf = StringIO(data)
                             csvReader = csv.DictReader(csvf)
-                            for rows in csvReader:
-                                if rows['AuditData']:
-                                    Audit_data = json.loads(rows['AuditData'])
-                                    data_json.append(Audit_data)
-
                             outfile = os.path.join(self.output_dir, json_filename)
                             with open(outfile, 'w', encoding='utf-8') as jsonf:
-                                jsonf.write(json.dumps(data_json))
+                                for rows in csvReader:
+                                    if rows['AuditData']:
+                                        Audit_data = json.loads(rows['AuditData'])
+                                        jsonf.write('{}\n'.format(json.dumps(Audit_data)))
                         self.logger.debug('UAL dump (%s%s to %s%s) response code: %d' % (start_date, start_time, end_date, end_time, response.status))
                         done = True
                 except asyncio.TimeoutError:
