@@ -136,6 +136,8 @@ Azure Subscription IAM Roles
 
 When creating the service principal, make sure to save the client secret value (not the client secret ID).
 
+Make sure to enable "Allow public client flows" for the service principal.
+
 ### Installing
 To install, clone the repository and then do a pip install:
 
