@@ -6,7 +6,7 @@ elif sys.version_info >= (3,11):
 
 from setuptools import setup
 setup(name='goosey',
-      version='1.2.0',
+      version='1.2.1',
       description='AzureAD, Azure and M365 Data Collector',
       author='Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace',
       classifiers=[
@@ -42,7 +42,8 @@ setup(name='goosey',
           'msrestazure',
           'Gooey==1.0.8.1',
           'typing-extensions>=4.1.1',
-          'pyAesCrypt'       
+          'pyAesCrypt',
+          'pytz'       
       ],
       zip_safe=False,
       include_package_data=True,

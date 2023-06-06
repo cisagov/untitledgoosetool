@@ -79,7 +79,9 @@ python -m venv .venv
 ### Requirements
 The following AzureAD/M365 permissions are required to run Untitled Goose Tool, and provide it read-only access to the tenant.
 
-A user account with the following permissions:
+Please note: The user account should be a cloud-only account (not sync'd to the on-premise environment), this will ensure that the login process stays the same across environments for the tool.
+
+A cloud-only user account with the following permissions:
 
 Exchange Online Admin Center
 ```

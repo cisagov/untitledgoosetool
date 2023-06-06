@@ -40,7 +40,7 @@ goosey messagetrace --gather-report
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 logger = None
 encryption_pw = None
@@ -61,6 +61,7 @@ class MessageTrace():
         config = configparser.ConfigParser()
         config.read(configfile)
 
+        self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.setemailaddress = config_get(config, 'msgtrc', 'setemailaddress', self.logger)
         if config_get(config, 'msgtrc', 'direction', self.logger):
             self.direction = config_get(config, 'msgtrc', 'direction', self.logger)
@@ -127,14 +128,24 @@ class MessageTrace():
 
         parameters = json.dumps(params)
         self.logger.debug(f'Specified parameters are: {params}')
+
         headers = {
-        'authority': 'admin.exchange.microsoft.com',
         'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'],
         'Content-Type': 'application/json',
         'validationkey': self.auth['validationkey']
         }
 
-        url = "https://admin.exchange.microsoft.com/beta/HistoricalSearch"
+        if self.exo_us_government == 'true':
+            addparams2 = {'authority': 'admin.exchange.microsoft.us'}
+            headers.update(addparams2)
+        else:
+            addparams2 = {'authority': 'admin.exchange.microsoft.com'}
+            headers.update(addparams2)
+
+        if self.exo_us_government == 'true':
+            url = "https://admin.exchange.microsoft.us/beta/HistoricalSearch"
+        else:
+            url = "https://admin.exchange.microsoft.com/beta/HistoricalSearch"
 
         self.logger.info('Submitting historical message trace report request...')
 
@@ -167,6 +178,8 @@ class MessageTrace():
         
     def check_status(self, args):
 
+        self.parse_config(args.config)
+
         if os.path.isfile(self.msgfile):
             with open(self.msgfile, "r") as f:
                 self.jobid = f.readline().strip()
@@ -177,13 +190,24 @@ class MessageTrace():
 
         self.logger.debug('Job id to check: %s' % (self.jobid))
 
-        url = "https://admin.exchange.microsoft.com/beta/HistoricalSearch?$filter=ReportType eq 'MessageTrace' or ReportType eq 'MessageTraceDetail'"
+        if self.exo_us_government == 'true':
+            url = "https://admin.exchange.microsoft.us/beta/HistoricalSearch?$filter=ReportType eq 'MessageTrace' or ReportType eq 'MessageTraceDetail'"
+        else:
+            url = "https://admin.exchange.microsoft.com/beta/HistoricalSearch?$filter=ReportType eq 'MessageTrace' or ReportType eq 'MessageTraceDetail'"
+
         headers = {
-        'authority': 'admin.exchange.microsoft.com',
         'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'],
         'Content-Type': 'application/json',
         'validationkey': self.auth['validationkey']
         }
+
+        if self.exo_us_government == 'true':
+            addparams = {'authority': 'admin.exchange.microsoft.us'}
+            headers.update(addparams)
+        else:
+            addparams = {'authority': 'admin.exchange.microsoft.com'}
+            headers.update(addparams)
+
         response = requests.request("GET", url, headers=headers)
         data = response.json()
 
@@ -210,6 +234,15 @@ class MessageTrace():
             self.logger.info("Waking up, checking report status...")
             response = requests.request("GET", url, headers=headers)
             data = response.json()
+            if 'error' in data:
+                if data['error']['message'] == 'User Auth Token Null in Context':
+                    self.logger.error("Error with authentication token: " + data['error']['message'])
+                    self.logger.error("Please re-auth.")
+                    sys.exit(1)
+                elif data['error']['message'] == 'Request validation failed with validation key':
+                    self.logger.error("Error with validation key: " + data['error']['message'])
+                    self.logger.error("Please re-auth.")
+                    sys.exit(1)   
             responseValue = data["value"]
             msgrpt = search_results(responseValue, self.jobid)
             statusOfRequest = msgrpt.get("Status")
@@ -249,14 +282,17 @@ class MessageTrace():
         ffprofile.set_preference("browser.download.dir", dldir)
         ffprofile.set_preference("browser.helperApps.neverAsk.saveToDisk", "text/plain, text/html, application/xhtml+xml, application/xml")
 
-        if self.headless:
+        if not self.headless:
             opts.add_argument("--headless")
 
         browser = webdriver.Firefox(firefox_profile=ffprofile,options=opts)
 
         try:
             if browser:
-                browser.get("https://login.windows.net")
+                if self.exo_us_government == 'true':
+                    browser.get("https://login.microsoftonline.us")
+                else:
+                    browser.get("https://login.microsoftonline.com")
 
                 WebDriverWait(browser, 60).until(EC.element_to_be_clickable(EMAILFIELD)).send_keys(self.username)
                 
@@ -300,8 +336,11 @@ class MessageTrace():
                 except Exception as e:
                     pass
                 
-                self.logger.info("Authentication completed. Going to admin.protection.outlook.com.")
-                url = "https://admin.protection.outlook.com/ExtendedReport/Download?Type=OnDemandReport&RequestID=" + self.jobid
+                self.logger.info("Authentication completed. Going to the admin.protection.outlook portal.")
+                if self.exo_us_government == 'true':
+                    url = "https://admin.protection.outlook.us/ExtendedReport/Download?Type=OnDemandReport&RequestID=" + self.jobid
+                else:
+                    url = "https://admin.protection.outlook.com/ExtendedReport/Download?Type=OnDemandReport&RequestID=" + self.jobid
 
                 browser.get(url)
                 isFileDownloaded = False
@@ -380,6 +419,11 @@ def main(args=None) -> None:
        
     auth = {}
 
+    config = configparser.ConfigParser()
+    config.read(args.config)
+
+    exo_us_government = config_get(config, 'config', 'exo_us_government', logger).lower()
+
     encrypted_ugtauth = False
 
     dir_path = os.path.dirname(os.path.realpath(args.authfile))
@@ -401,7 +445,10 @@ def main(args=None) -> None:
     try:
         logger.info("Reading in authfile: {}".format(args.authfile))
         with open(args.authfile, 'r') as infile:
-            auth = json.loads(infile.read())['mfa']['https://graph.microsoft.com/.default']
+            if exo_us_government == 'true':
+                auth = json.loads(infile.read())['mfa']['https://graph.microsoft.us/.default']
+            else:
+                auth = json.loads(infile.read())['mfa']['https://graph.microsoft.com/.default']
     except Exception as e:
         logger.error("{}".format(str(e)))
         raise e    

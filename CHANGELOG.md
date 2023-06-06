@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - The goose is loose - 2023-06-06
+### Added
+- Implemented new tables to be pulled from MDE.
+- Added two SBOM files.
+
+### Changed
+- Updated readme with cloud-only account requirement.
+- Better logging for _no_results.json.
+
+### Fixed
+- Fixed Azure government calls.
+- Fixed minor debug logging issues.
+- Fixed the AttributeError encountered during AzureAD calls.
+
 ## [1.2.0] - The goose is loose - 2023-04-21
 ### Added
 - Implemented delegated application authentication.

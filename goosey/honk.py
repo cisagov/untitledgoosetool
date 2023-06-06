@@ -25,7 +25,7 @@ from goosey.mde_datadumper import MDEDataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -116,10 +116,12 @@ async def run(args, config, auth, auth_un_pw=None):
     for key in auth['app_auth']:
         if 'graph.microsoft.com' in key or 'graph.microsoft.us' in key:
             msft_graph_app_auth = auth['app_auth'][key]
-        if 'management.azure.com' in key:
+        if 'management.azure.com' in key or 'management.azure.us' in key:
             mgmt_app_auth = auth['app_auth'][key]
-        if 'api.securitycenter.microsoft.com' in key:
+        if 'api.securitycenter.microsoft.com' in key or 'api-gcc.securitycenter.microsoft.us' in key or 'api-gov.securitycenter.microsoft.us' in key:
             msft_security_center_auth = auth['app_auth'][key]
+        if 'api.security.microsoft.com' in key or 'api-gcc.security.microsoft.us' in key or 'api-gov.security.microsoft.us' in key:
+            msft_security_auth = auth['app_auth'][key]
 
     maindumper = DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, session, args.debug)
 
@@ -132,7 +134,7 @@ async def run(args, config, auth, auth_un_pw=None):
         m365dumper = M365DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
         azureaddumper = AzureAdDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
         azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, auth_un_pw, args.debug)
-        mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_security_center_auth, maindumper.ahsession, config, args.debug)
+        mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_security_center_auth, msft_security_auth, maindumper.ahsession, config, args.debug)
 
     async with maindumper.ahsession as ahsession:
 
@@ -151,12 +153,15 @@ def _get_section_dict(config, s):
         logger.warning(f'Error getting section dictionary from config: {str(e)}')
     return {}
 
-def parse_config(configfile, args):
+def parse_config(configfile, args, auth=None):
     global data_calls
     config = configparser.ConfigParser()
     config.read(configfile)
 
-    sections = ['azure', 'm365', 'azuread', 'mde']
+    if not auth:
+        sections = ['azure', 'm365', 'azuread', 'mde']
+    else:
+        sections = ['auth']    
 
     for section in sections:
         d = _get_section_dict(config, section)
@@ -177,7 +182,6 @@ def parse_config(configfile, args):
     if args.mde:
         for item in [x.replace('dump_', '') for x in dir(MDEDataDumper) if x.startswith('dump_')]:
             data_calls['mde'][item] = True
-
 
     logger.debug(json.dumps(data_calls, indent=2))
     return config
@@ -224,7 +228,7 @@ def main(args=None, gui=False) -> None:
         if os.path.isfile(args.auth):
             logger.info("Reading in auth: {}".format(args.auth))
             with open(args.auth, 'r') as infile:
-                auth_un_pw = parse_config(args.auth, args)
+                auth_un_pw = parse_config(args.auth, args, auth=True)
         else:
             auth_un_pw = None
     except Exception as e:

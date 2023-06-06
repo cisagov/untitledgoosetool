@@ -23,7 +23,7 @@ from goosey.utils import *
 from io import StringIO
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 class M365DataDumper(DataDumper):
 
@@ -241,11 +241,12 @@ class M365DataDumper(DataDumper):
 
             async with self.ahsession.request("GET", url, headers=headers) as r:
                 result = await r.json()
-
-                finalvalue = result['ClientAccessSettings']
+                
                 if 'ClientAccessSettings' not in result:
                     self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
                     return
+                else:
+                    finalvalue = result['ClientAccessSettings']
 
                 outfile = os.path.join(self.output_dir, "EXO_MailboxCASSettings.json")
                 with open(outfile, 'a', encoding="utf-8") as f:

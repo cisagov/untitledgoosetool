@@ -15,7 +15,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 class AzureAdDataDumper(DataDumper):
 
@@ -144,17 +144,19 @@ class AzureAdDataDumper(DataDumper):
                             f.write(end_time)
                     break
 
-                except Exception as e:
-                    self.logger.error('Error on nextLink retrieval: {}'.format(str(e)))
-                    if e.status:
-                        if e.status == 429:
-                            self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
-                            await asyncio.sleep(60)
-                            retries -= 1
-                            self.logger.debug('Retries remaining: {}'.format(str(retries)))
-                        elif e.status == 401:
-                            self.logger.error('401 unauthorized message received. Exiting calls. Please re-auth.')
-                            sys.exit(1)
+                except Exception as e:                    
+                    try:
+                        if e.status:
+                            if e.status == 429:
+                                self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
+                                await asyncio.sleep(60)
+                                retries -= 1
+                                self.logger.debug('Retries remaining: {}'.format(str(retries)))
+                            elif e.status == 401:
+                                self.logger.error('401 unauthorized message received. Exiting calls. Please re-auth.')
+                                sys.exit(1)
+                    except AttributeError as a:
+                        self.logger.error('Error on nextLink retrieval: {}'.format(str(e)))
 
             if os.path.isfile(outfile) and os.stat(outfile).st_size == 0:
                 os.remove(outfile)     
@@ -266,15 +268,17 @@ class AzureAdDataDumper(DataDumper):
 
 
                 except Exception as e:
-                    self.logger.error('Error on nextLink retrieval: {}'.format(str(e)))
-                    if e.status:
-                        if e.status == 429:
-                            self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
-                            await asyncio.sleep(60)
-                            retries -= 1
-                        elif e.status == 401:
-                            self.logger.info('401 unauthorized message received. Exiting calls. Please re-auth.')
-                            sys.exit(1)
+                    try:
+                        if e.status:
+                            if e.status == 429:
+                                self.logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
+                                await asyncio.sleep(60)
+                                retries -= 1
+                            elif e.status == 401:
+                                self.logger.info('401 unauthorized message received. Exiting calls. Please re-auth.')
+                                sys.exit(1)
+                    except AttributeError as a:
+                        self.logger.error('Error on nextLink retrieval: {}'.format(str(e)))
                             
 
         self.logger.info('Finished dumping AzureAD audit logs.')
@@ -452,7 +456,7 @@ class AzureAdDataDumper(DataDumper):
                     f.write(json.dumps(entry, sort_keys=True) + '\n')
         elif not child_list:
             with open(self.failurefile, 'a+', encoding='utf-8') as f:
-                f.write(parent + "_" + child + '\n')
+                f.write('No output file: ' + parent + "_" + child + ' - ' + str((datetime.now())) + '\n')
 
         self.logger.info('Finished dumping %s %s information.' % (parent, child))
     
