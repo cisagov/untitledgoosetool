@@ -12,7 +12,7 @@ from goosey.azure_dumper import AzureDataDumper
 from goosey.mde_datadumper import MDEDataDumper
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 def main():
     auth_s = '[auth]\nusername=\npassword=\nappid=\nclientsecret=\n\n'
@@ -20,7 +20,7 @@ def main():
     with open('.auth', 'w') as f:
         f.write(auth_s)
 
-    s = '[config]\ntenant=\nus_government=\nexo_us_government=\nsubscriptionid=\nm365=\n\n'
+    s = '[config]\ntenant=\nus_government=\nmde_gcc=\nmde_gcc_high=\nexo_us_government=\nsubscriptionid=\nm365=\n\n'
     
     s += '[filters]\ndate_start=\ndate_end=\n\n'
 

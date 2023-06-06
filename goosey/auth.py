@@ -19,15 +19,15 @@ import sys
 import time
 
 from goosey.utils import *
-from seleniumwire import webdriver
 from selenium.webdriver import FirefoxOptions
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from seleniumwire import webdriver
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 green = "\x1b[1;32m"
 
@@ -97,9 +97,17 @@ class Authentication():
         Returns the application resource URI for a commercial or government tenant.
         """
         if self.us_government == 'false':
-            return ['https://graph.microsoft.com/.default', 'https://api.securitycenter.microsoft.com/.default', 'https://management.azure.com/.default']
+            if self.mde_gcc == 'false' and self.mde_gcc_high == 'false':
+                return ['https://graph.microsoft.com/.default', 'https://api.securitycenter.microsoft.com/.default', 'https://management.azure.com/.default', 'https://api.security.microsoft.com/.default']
+            elif self.mde_gcc == 'true':
+                return ['https://graph.microsoft.com/.default', 'https://api.securitycenter.microsoft.com/.default', 'https://api-gcc.securitycenter.microsoft.us', 'https://api-gcc.security.microsoft.us']
+            elif self.mde_gcc_high == 'true':
+                return ['https://graph.microsoft.com/.default', 'https://api.securitycenter.microsoft.com/.default', 'https://api-gov.securitycenter.microsoft.us', 'https://api-gov.security.microsoft.us']
         elif self.us_government == 'true':
-            return 'https://graph.microsoft.us/.default'
+            if self.mde_gcc == 'true':
+                return ['https://graph.microsoft.us/.default', 'https://management.azure.us/.default', 'https://api-gcc.securitycenter.microsoft.us', 'https://api-gcc.security.microsoft.us']
+            elif self.mde_gcc_high =='true':
+                return ['https://graph.microsoft.us/.default', 'https://management.azure.us/.default', 'https://api-gov.securitycenter.microsoft.us', 'https://api-gov.security.microsoft.us']
 
     def authenticate_device_code_selenium(self):
         """
@@ -532,8 +540,12 @@ class Authentication():
                         self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
 
                     for request in browser.requests:
-                        if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
-                            self.tokendata['validationkey'] = request.headers['validationkey']
+                        if self.exo_us_government == 'false':
+                            if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
+                                self.tokendata['validationkey'] = request.headers['validationkey']
+                        else:
+                            if request.url == "https://admin.exchange.microsoft.us/beta/UserProfile":
+                                self.tokendata['validationkey'] = request.headers['validationkey']
 
                     if not self.tokendata['validationkey']:
                         self.logger.error("Error obtaining validationkey.")
@@ -645,6 +657,8 @@ class Authentication():
         if not self.d4iot:
             self.tenant = config_get(config, 'config', 'tenant', self.logger)
             self.us_government = config_get(config, 'config', 'us_government', self.logger).lower()
+            self.mde_gcc = config_get(config, 'config', 'mde_gcc', self.logger).lower()
+            self.mde_gcc_high = config_get(config, 'config', 'mde_gcc_high', self.logger).lower()
             self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
             self.subscriptions = config_get(config, 'config', 'subscriptionid', self.logger)
             self.m365 = config_get(config, 'config', 'm365', self.logger).lower()

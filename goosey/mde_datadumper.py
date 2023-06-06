@@ -11,23 +11,39 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 end_29_days_ago = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29)
 today_date = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
 
 class MDEDataDumper(DataDumper):
 
-    def __init__(self, output_dir, reports_dir, auth, app_auth, session, config, debug):
+    def __init__(self, output_dir, reports_dir, auth, app_auth, app_auth2, session, config, debug):
         super().__init__(f'{output_dir}{os.path.sep}mde', reports_dir, auth, app_auth, session, debug)
+        self.app_auth2 = app_auth2
         self.failurefile = os.path.join(reports_dir, '_no_results.json')
         self.logger = setup_logger(__name__, debug)
         self.us_government = config_get(config, 'config', 'us_government', self.logger).lower()
+        self.mde_gcc = config_get(config, 'config', 'mde_gcc', self.logger).lower()
+        self.mde_gcc_high = config_get(config, 'config', 'mde_gcc_high', self.logger).lower()        
         self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.call_object = [self.get_url(), self.app_auth, self.logger, self.output_dir, self.get_session()]
     
     def get_url(self):
-        return "https://api-us.securitycenter.windows.com/"
+        if self.mde_gcc == "true":
+            return "https://api-gcc.securitycenter.microsoft.us"
+        elif self.mde_gcc_high == "true":
+            return "https://api-gov.securitycenter.microsoft.us"
+        else:
+            return "https://api-us.securitycenter.windows.com/"
+    
+    def get_identity_url(self):
+        if self.mde_gcc == "true":
+            return "https://api-gcc.security.microsoft.us"
+        elif self.mde_gcc_high == "true":
+            return "https://api-gov.security.microsoft.us"
+        else:
+            return "https://api.security.microsoft.com/"
 
     async def dump_machines(self) -> None:
         await helper_single_object("api/machines", self.call_object, self.failurefile)
@@ -55,6 +71,7 @@ class MDEDataDumper(DataDumper):
     
     
     async def check_machines(self):
+        check_app_auth_token(self.app_auth, self.logger)
         outfile = os.path.join(self.output_dir, 'api_machines.json')
         data = []
         if os.path.exists(outfile):
@@ -85,7 +102,7 @@ class MDEDataDumper(DataDumper):
             i = 0
 
         listOfIds = list(findkeys(data, 'id'))
-        tables = ['DeviceEvents',  'DeviceLogonEvents', 'DeviceRegistryEvents', 'DeviceProcessEvents', 'DeviceNetworkEvents', 'DeviceFileEvents']
+        tables = ['DeviceEvents', 'DeviceLogonEvents', 'DeviceRegistryEvents', 'DeviceProcessEvents', 'DeviceNetworkEvents', 'DeviceFileEvents', 'DeviceImageLoadEvents']        
 
         for i in range(int(i),len(listOfIds)):
             machine_dir = os.path.join(self.output_dir,'Machine ' + str(listOfIds[i]))
@@ -109,6 +126,7 @@ class MDEDataDumper(DataDumper):
                     f.write(f'{j}')
                                 
                 payload = {"Query": tables[j] + " |where DeviceId=='" + listOfIds[i] + "'"}
+ 
 
                 outfile = os.path.join(machine_dir, str(tables[j]) + ".json")
                 boundsfile = os.path.join(machine_dir, str(tables[j]) + ".bounds")
@@ -121,23 +139,52 @@ class MDEDataDumper(DataDumper):
 
                 check_app_auth_token(self.app_auth, self.logger)
 
-                self.logger.info('Finished dumping %s table for device %s.' % (tables[j], listOfIds[i]))
-
-                if os.path.isfile(time_statefile):
-                    self.logger.debug(f'Removing time save state file: {time_statefile}.')
-                    os.remove(time_statefile)
-
-                if os.path.isfile(boundsfile):
-                    self.logger.debug(f'Removing bounds file: {boundsfile}.')
-                    os.remove(boundsfile)                
+                self.logger.info('Finished dumping %s table for device %s.' % (tables[j], listOfIds[i]))             
 
             self.logger.debug(f'Removing table save state file: {table_statefile}.')
             os.remove(table_statefile)
 
             if len(os.listdir(machine_dir)) == 0:
                 self.logger.info('No data found, removing %s directory.' %(listOfIds[i]))
-                os.rmdir(machine_dir)
+                os.rmdir(machine_dir)        
 
+    async def dump_advanced_identity_hunting_query(self) -> None:
+        """Dumps the results from advanced hunting API queries.
+        API Reference: https://learn.microsoft.com/en-us/microsoft-365/security/defender/api-advanced-hunting?view=o365-worldwide
+        """
+
+        check_app_auth_token(self.app_auth2, self.logger)
+
+        id_tables = ['IdentityDirectoryEvents', 'IdentityLogonEvents', 'IdentityQueryEvents']
+        
+        id_table_statefile = os.path.join(self.output_dir, '.id_table_savestate')
+        if os.path.isfile(id_table_statefile):
+            self.logger.debug(f'Identity table save state file exists at {id_table_statefile}')
+            with open(id_table_statefile, "r") as f:
+                id_table_id = f.readline().strip()
+                j = id_table_id
+        else:
+            self.logger.debug(f'Identity table save state file does not exist at {id_table_statefile}. Starting a full pull.')
+            j = 0
+
+        for j in range(int(j),len(id_tables)):
+            with open(id_table_statefile, 'w') as f:
+                f.write(f'{j}')
+
+            id_payload = {"Query": id_tables[j]}
+
+            id_outfile = os.path.join(self.output_dir, str(id_tables[j]) + ".json")
+            id_boundsfile = os.path.join(self.output_dir, str(id_tables[j]) + ".bounds")
+            id_bounds_statefile = os.path.join(self.output_dir, "." + str(id_tables[j]) + "_bounds_savestate")
+            id_time_statefile = os.path.join(self.output_dir, "." + str(id_tables[j]) + "_savestate")
+
+            params = [self.get_identity_url(), self.app_auth2, self.logger, self.get_session(), id_payload, id_outfile, id_boundsfile, id_time_statefile, id_bounds_statefile]
+
+            await self.post_single_object(object='api/advancedhunting/run', params=params, table_name=id_tables[j])
+
+            check_app_auth_token(self.app_auth2, self.logger)
+
+            self.logger.info('Finished dumping %s table.' % (id_tables[j]))         
 
     async def check_time_query(self, params, force_slice, splits, shift):
         _, _, logger, _, _, _ = params[0], params[1], params[2], params[3], params[4], params[5]
@@ -333,7 +380,7 @@ class MDEDataDumper(DataDumper):
         except Exception as e:
             logger.error('Error on retrieval: {}'.format(str(e)))    
 
-    async def post_single_object(self, object, params, table_name, guid, failurefile=None) -> None:
+    async def post_single_object(self, object, params, table_name, guid=None, failurefile=None) -> None:
         """Posts single queries for dump_advanced_hunting_query.
         API Reference: https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/run-advanced-query-api?view=o365-worldwide
         """
@@ -399,8 +446,12 @@ class MDEDataDumper(DataDumper):
                                     retries = 0
                                 elif not result['Results']:
                                     logger.debug('%s has no information (size is 0). No output file.' % (outfile))
-                                    with open(self.failurefile, 'a+', encoding='utf-8') as f:
-                                        f.write(guid + '_' + table_name + '\n')
+                                    if guid:
+                                        with open(self.failurefile, 'a+', encoding='utf-8') as f:
+                                            f.write('No output file: ' + guid + '_' + table_name + ' - ' + str((datetime.now())) + '\n')
+                                    else:
+                                        with open(self.failurefile, 'a+', encoding='utf-8') as f:
+                                            f.write('No output file: ' + table_name + ' - ' + str((datetime.now())) + '\n')                                                                          
                                     retries = 0
                                     break
                             if 'error' in result:

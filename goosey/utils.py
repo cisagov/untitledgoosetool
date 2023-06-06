@@ -18,7 +18,7 @@ from tracemalloc import start
 from logging import handlers
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 if sys.platform == 'win32':
     import msvcrt
@@ -228,8 +228,9 @@ def config_get(conf, section: str, option: str, logger=None, default=None):
         else:
             print(err)
     except configparser.NoOptionError as e:
-        err = f"Missing option in config file: {option}. Proceeding."
-        logger.warning(err) if logger else print(err)
+        if option:
+            err = f"Missing option in config file: {option}. Proceeding."
+            logger.warning(err) if logger else print(err)
     except Exception as e:
         err = f"Unknown exception while parsing config file: {str(e)}"
         logger.warning(err) if logger else print(err)
@@ -280,20 +281,26 @@ async def get_nextlink(url, outfile, session, logger, auth):
         except asyncio.TimeoutError:
             logger.error('TimeoutError has occurred on {}'.format(skiptoken))
         except Exception as e:
-            logger.error('Error on nextLink retrieval {}: {}'.format(skiptoken, str(e)))
             if retries == 0:
                 logger.info('Error. No more retries on {}.'.format(skiptoken))
                 url = None 
             else:
                 logger.info('Error. Retrying {} up to {} more times'.format(skiptoken, retries))
-                logger.debug(e)
-                if e.status:
-                    if e.status == 429:
-                        logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
-                        await asyncio.sleep(60)
-                    else:
-                        logger.info('Error: {}'.format(str(e)))
-                    retries -= 1
+                try:
+                    if e.status:
+                        if e.status == 429:
+                            logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
+                            await asyncio.sleep(60)
+                        elif e.status == 401:
+                            logger.error('Unauthorized message received. Exiting calls.')
+                            logger.error("Check auth to make sure it's not expired.")
+                            return                            
+                        else:
+                            logger.info('Error: {}'.format(str(e)))
+                        retries -= 1
+                except AttributeError as a:
+                    logger.error('Error on nextLink retrieval {}: {}'.format(skiptoken, str(e)))
+
 
 
 async def helper_single_object(object, params, failurefile=None, retries=5) -> None:
@@ -352,21 +359,22 @@ async def helper_single_object(object, params, failurefile=None, retries=5) -> N
                     nexturl = result['@odata.nextLink']
                     await get_nextlink(nexturl, outfile, session, logger, auth)
         except Exception as e:
-            if e.status:
-                if e.status == 429:
-                    logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
-                    await asyncio.sleep(60)
-                    retries -= 1
-                elif e.status == 401:
-                    logger.error('Unauthorized message received. Exiting calls.')
-                    logger.error("Check auth to make sure it's not expired.")
-                    return
-                elif e.status == 400:
-                    logger.error('Error received on ' + str(object) + ': '  + str(e))
-                    with open(failurefile, 'a+', encoding='utf-8') as f:
-                        f.write('Error: ' + name + ' - ' + str((datetime.now())) + '\n')
-                    return
-            else:
+            try:
+                if e.status:
+                    if e.status == 429:
+                        logger.info('Sleeping for 60 seconds because of API throttle limit was exceeded.')
+                        await asyncio.sleep(60)
+                        retries -= 1
+                    elif e.status == 401:
+                        logger.error('Unauthorized message received. Exiting calls.')
+                        logger.error("Check auth to make sure it's not expired.")
+                        return
+                    elif e.status == 400:
+                        logger.error('Error received on ' + str(object) + ': '  + str(e))
+                        with open(failurefile, 'a+', encoding='utf-8') as f:
+                            f.write('Error: ' + name + ' - ' + str((datetime.now())) + '\n')
+                        return
+            except AttributeError as a:
                 logger.error('Error on nextLink retrieval: {}'.format(str(e)))
 
         logger.info('Finished dumping %s information.' % (object))

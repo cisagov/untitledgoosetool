@@ -6,11 +6,10 @@ This module has all the telemetry pulls for Azure resources.
 """
 
 import asyncio
-from http.client import CONTINUE
 import getpass
 import json
 import os
-from tabnanny import check
+import pytz
 
 from azure.core.exceptions import *
 from azure.identity import AzureAuthorityHosts
@@ -19,19 +18,20 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.monitor import MonitorManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import SubscriptionClient, ResourceManagementClient
+from azure.mgmt.security import SecurityCenter
 from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.web import WebSiteManagementClient
-from azure.mgmt.security import SecurityCenter
 from azure.storage.blob import BlobServiceClient
 from goosey.datadumper import DataDumper
 from goosey.utils import *
-from msrestazure.azure_cloud import AZURE_PUBLIC_CLOUD as PUBLIC_CLOUD
-from msrestazure.azure_cloud import AZURE_US_GOV_CLOUD as GOV_CLOUD
+from http.client import CONTINUE
 from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
+
+utc = pytz.UTC
 
 class AzureDataDumper(DataDumper):
 
@@ -84,7 +84,7 @@ class AzureDataDumper(DataDumper):
                 if len(self.subscription_id_list) == 0:
                     self.logger.error(f"Subscription list is empty, you won't get any data back for Azure data calls.")
         else:
-            self.subscription_id_list = config['auth']['subscriptionid'].split(",")
+            self.subscription_id_list = config['config']['subscriptionid'].split(",")
 
         self.network_managers, self.compute_clients, self.web_clients, self.storage_clients, \
             self.resource_clients, self.monitor_clients, self.security_clients = [], [], [], [], [], [], []
@@ -132,17 +132,19 @@ class AzureDataDumper(DataDumper):
             'Authorization': '%s %s' % (self.app_auth['token_type'], self.app_auth['access_token']),
             'Content-type': 'application/json'
             }
-        
-        
+
         for subscriptionId in self.subscription_id_list:
+            self.logger.info("Getting D4IOT portal pcaps from " + subscriptionId + "...")
             pcap_dir = os.path.join(self.output_dir, subscriptionId, 'pcaps')
             check_output_dir(pcap_dir, self.logger)
 
             devgrps_outfile = os.path.join(self.output_dir, subscriptionId, "portal_device_groups.json")
-            # outfile = os.path.join(self.output_dir, subscriptionId, "portal_alerts.json")
 
             locations = []
-            loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
+            if self.us_gov.lower() == "true":
+                loc_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
+            else:
+                loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
 
             async with self.ahsession.request('GET', loc_url, headers=header, ssl=False) as r:
                 result = await r.json()
@@ -160,7 +162,10 @@ class AzureDataDumper(DataDumper):
 
             for location in locations:
                 device_grps = []
-                devgrp_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
+                if self.us_gov.lower() == "true":
+                    devgrp_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
+                else:
+                    devgrp_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
 
                 async with self.ahsession.request('GET', devgrp_url, headers=header, ssl=False) as r:
                     result = await r.json()
@@ -178,8 +183,11 @@ class AzureDataDumper(DataDumper):
 
                 alert_ids = []
                 for val in device_grps:
-                    url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
-                            
+                    if self.us_gov.lower() == "true":
+                        url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
+                    else:
+                        url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
+                                
                     async with self.ahsession.request('GET', url, headers=header, ssl=False) as r:
                         result = await r.json()
                         nexturl = None
@@ -195,9 +203,11 @@ class AzureDataDumper(DataDumper):
                                 self.logger.error("Please re-auth.")
                                 sys.exit(1)                           
 
-
             for id in alert_ids:
-                availability_url =  "https://management.azure.com" + id + "/pcapAvailability?api-version=2021-07-01-preview"
+                if self.us_gov.lower() == "true":
+                    availability_url =  "https://management.azure.us" + id + "/pcapAvailability?api-version=2021-07-01-preview"
+                else:
+                    availability_url =  "https://management.azure.com" + id + "/pcapAvailability?api-version=2021-07-01-preview"
                 i = id.split("/")[-1]
                 outfile = os.path.join(pcap_dir, "pcap_" + str(i) + ".pcap")
                 async with self.ahsession.request('POST', availability_url, headers=header, ssl=False) as r:
@@ -221,7 +231,10 @@ class AzureDataDumper(DataDumper):
 
                         elif result['status'] == 'Available':
                             self.logger.debug("PCAP available for alert id %s." % (i))
-                            request_url = "https://management.azure.com" + id + "/pcapRequest?api-version=2021-07-01-preview"
+                            if self.us_gov.lower() == "true":
+                                request_url = "https://management.azure.us" + id + "/pcapRequest?api-version=2021-07-01-preview"
+                            else:
+                                request_url = "https://management.azure.com" + id + "/pcapRequest?api-version=2021-07-01-preview"
                             status = None
 
                             while status != "Done":
@@ -240,8 +253,12 @@ class AzureDataDumper(DataDumper):
 
                         elif result['status'] == "UnsupportedAlert":
                              self.logger.debug("PCAP not available for alert id %s. Proceeding" % (i))
+                        elif result['status'] == "DisconnectedSensor":
+                            self.logger.error("Sensor is disconnected. Stopping PCAP pull.")
+                            return
                         else:
                             self.logger.debug(result)
+            self.logger.info("Getting D4IOT portal pcaps from " + subscriptionId + "...")
                         
     async def dump_portal_alerts(self) -> None:
 
@@ -250,13 +267,19 @@ class AzureDataDumper(DataDumper):
             'Content-type': 'application/json'
             }
 
+
         for subscriptionId in self.subscription_id_list:
+
+            self.logger.info("Getting D4IOT portal alerts from " + subscriptionId + "...")
 
             devgrps_outfile = os.path.join(self.output_dir, subscriptionId, "portal_device_groups.json")
             outfile = os.path.join(self.output_dir, subscriptionId, "portal_alerts.json")
 
             locations = []
-            loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
+            if self.us_gov.lower() == "true":
+                loc_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
+            else:
+                loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
 
             async with self.ahsession.request('GET', loc_url, headers=header, ssl=False) as r:
                 result = await r.json()
@@ -271,7 +294,10 @@ class AzureDataDumper(DataDumper):
 
             for location in locations:
                 device_grps = []
-                devgrp_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
+                if self.us_gov.lower() == "true":
+                    devgrp_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
+                else:
+                    devgrp_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups?api-version=2021-02-01-preview"
 
                 async with self.ahsession.request('GET', devgrp_url, headers=header, ssl=False) as r:
                     result = await r.json()
@@ -288,7 +314,10 @@ class AzureDataDumper(DataDumper):
                             sys.exit(1)      
 
                 for val in device_grps:
-                    url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
+                    if self.us_gov.lower() == "true":
+                        url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"
+                    else:
+                        url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/deviceGroups/" + val + "/alerts?api-version=2021-07-01-preview"                        
                             
                     async with self.ahsession.request('GET', url, headers=header, ssl=False) as r:
                         result = await r.json()
@@ -306,7 +335,8 @@ class AzureDataDumper(DataDumper):
                                 self.logger.error("Error with authentication token: " + result['error']['message'])
                                 self.logger.error("Please re-auth.")
                                 sys.exit(1)                           
-                        await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)           
+                        await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)
+            self.logger.info("Finished getting D4IOT portal alerts from " + subscriptionId + ".")           
 
     async def dump_portal_defendersettings(self) -> None:
 
@@ -316,9 +346,12 @@ class AzureDataDumper(DataDumper):
             }
 
         for subscriptionId in self.subscription_id_list:
-
+            self.logger.info("Getting D4IOT portal defender settings from " + subscriptionId + "...")
             outfile = os.path.join(self.output_dir, subscriptionId, "portal_defender_settings.json")
-            url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/defenderSettings?api-version=2021-02-01-preview"
+            if self.us_gov.lower() == "true":
+                url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/defenderSettings?api-version=2021-02-01-preview"
+            else:
+                url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/defenderSettings?api-version=2021-02-01-preview"
 
             async with self.ahsession.request('GET', url, headers=header, ssl=False) as r:
                 result = await r.json()
@@ -334,6 +367,8 @@ class AzureDataDumper(DataDumper):
                         self.logger.error("Please re-auth.")
                         sys.exit(1)
 
+            self.logger.info("Finished getting D4IOT portal defender settings from " + subscriptionId + ".")
+
     async def dump_portal_sensors(self) -> None:
 
         header = {
@@ -342,14 +377,16 @@ class AzureDataDumper(DataDumper):
             }
 
         for subscriptionId in self.subscription_id_list:
-
+            self.logger.info("Getting D4IOT portal sensors from " + subscriptionId + "...")
             sites_outfile = os.path.join(self.output_dir, subscriptionId, "portal_sites.json")
             outfile = os.path.join(self.output_dir, subscriptionId, "portal_sensors.json")
             onsite_outfile = os.path.join(self.output_dir, subscriptionId, "portal_onpremise_sensors.json")
 
             locations = []
-            loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
-
+            if self.us_gov.lower() == "true":
+                loc_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
+            else:
+                loc_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations?api-version=2021-09-01-preview"
             async with self.ahsession.request('GET', loc_url, headers=header, ssl=False) as r:
                 result = await r.json()
                 if 'value' in result:
@@ -363,7 +400,10 @@ class AzureDataDumper(DataDumper):
 
             for location in locations:
                 sites = []
-                sites_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites?api-version=2021-09-01-preview"
+                if self.us_gov.lower() == "true":
+                    sites_url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites?api-version=2021-09-01-preview"
+                else:
+                    sites_url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites?api-version=2021-09-01-preview"
 
                 async with self.ahsession.request('GET', sites_url, headers=header, ssl=False) as r:
                     result = await r.json()
@@ -380,8 +420,10 @@ class AzureDataDumper(DataDumper):
                             sys.exit(1)
 
                 for val in sites:
-                    url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites/" + val + "/sensors?api-version=2021-09-01-preview"
-                            
+                    if self.us_gov.lower() == "true":
+                        url = "https://management.azure.us/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites/" + val + "/sensors?api-version=2021-09-01-preview"
+                    else:
+                        url = "https://management.azure.com/subscriptions/" + subscriptionId + "/providers/Microsoft.IoTSecurity/locations/" + location + "/sites/" + val + "/sensors?api-version=2021-09-01-preview"        
                     async with self.ahsession.request('GET', url, headers=header, ssl=False) as r:
                         result = await r.json()
                         nexturl = None
@@ -398,7 +440,8 @@ class AzureDataDumper(DataDumper):
                                 self.logger.error("Error with authentication token: " + result['error']['message'])
                                 self.logger.error("Please re-auth.")
                                 sys.exit(1)                           
-                        await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)  
+                        await get_nextlink(nexturl, outfile, self.ahsession, self.logger, self.app_auth)
+            self.logger.info("Finished getting D4IOT portal sensors settings from " + subscriptionId + ".")
    
     async def dump_diagnostic_settings(self) -> None:
         for i in range(0, len(self.subscription_id_list)):
@@ -601,36 +644,34 @@ class AzureDataDumper(DataDumper):
                 self.logger.debug("Caught HTTP Response Error on subscription " + sub_id)
                 continue
 
-    def auxillary_activity_log(self, start, end, statefile, i):
-        statefile_dict= {}
+    def auxillary_activity_log(self, start, end, i, statefile=None):
         sub_id = self.subscription_id_list[i]
         monitor_client = self.monitor_clients[i]
-        self.logger.info('Dumping Azure Activity Log for ' + sub_id +'...')
+        self.logger.info('Dumping Azure Activity Log for ' + sub_id +'...')  
 
         sub_directory = os.path.join(self.output_dir, sub_id, "Activity Log")
         if not os.path.exists(sub_directory):
             os.mkdir(sub_directory)
 
+        if statefile is None:
+            statefile = os.path.join(self.output_dir, sub_id, '.activity_log_state')
+
         while start != end:
             end_time = '%sT23:59:59.999999Z' % (datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date())
-            statefile_dict[i] = end_time
-
+                
             filters = 'eventTimestamp ge %s' % (start) + ' and eventTimestamp le %s' % (end_time) 
             outfile = os.path.join(sub_directory, 'azure_activity_log_' + str(datetime.strptime(end_time, ("%Y-%m-%dT%H:%M:%S.%fZ")).date()) + '.json')
+            self.logger.debug(f'Dumping Azure Activity logs for time frame {start} to {end_time}')
             activity_log = monitor_client.activity_logs
 
             with open(outfile, 'w', encoding='utf-8') as f:
-                for event in  activity_log.list(filter=filters):
+                for event in activity_log.list(filter=filters):
                     f.write(json.dumps(event.as_dict()))
                     f.write("\n")
                     f.flush()
                     os.fsync(f)
             with open(statefile, 'w') as f:
-                for key in statefile_dict.keys():
-                    f.write(str(key))
-                    f.write("\n")
-                    f.write(str(statefile_dict[key]))
-                    f.write("\n")
+                f.write(end_time)         
 
             start = '%sT00:00:00.000000Z' % ((datetime.strptime(start, ("%Y-%m-%dT%H:%M:%S.%fZ")).date() + timedelta(days=1)).strftime("%Y-%m-%d"))
 
@@ -641,25 +682,30 @@ class AzureDataDumper(DataDumper):
         :rtype:
         """
         save_state = False
-        statefile = f'{self.output_dir}{os.path.sep}.activity_log_state'
-        if os.path.isfile(statefile):
-            save_state = True
-            self.logger.debug(f'Save state file exists at {statefile}')
-            self.logger.info(f'Activity log save state file found. Continuing from last checkpoint.')
-            savestate_times = {}
-            with open(statefile, 'r') as reader:
-                while True:
-                    id_num = reader.readline().strip()
-                    if id_num == '':
-                        break
-                    subscription_id_num = int(id_num)
+        sub_statefile = os.path.join(self.output_dir, '.sub_savestate')
+
+        if os.path.isfile(sub_statefile):
+            self.logger.debug(f'Subscription save state file exists at {sub_statefile}')
+
+            with open(sub_statefile, "r") as f:
+                subscription_id_num = f.readline().strip()
+                subscription_id_num = int(subscription_id_num)
+                subscript_id = self.subscription_id_list[subscription_id_num]
+
+            statefile = os.path.join(self.output_dir, subscript_id, '.activity_log_state')
+
+            if os.path.isfile(statefile):    
+                self.logger.info(f'Activity log save state file found. Continuing from last checkpoint.')
+                with open(statefile, 'r') as reader:
                     save_state_end_time = reader.readline().strip()
                     start_time_saved_sub = '%sT00:00:00.000000Z' % (datetime.strptime(save_state_end_time, ("%Y-%m-%dT%H:%M:%S.%fZ")).date() + timedelta(days=1))
+                save_state = True
+            else:
+                self.logger.info(f'Activity log save state file not found. Starting a fresh pull.')
+                subscription_id_num = 0
+                save_state = False
+                start_date = '%sT00:00:00.000000Z' % ((datetime.now() - timedelta(days=89)).strftime("%Y-%m-%d"))              
 
-                    savestate_times[subscription_id_num] = start_time_saved_sub
-                    if not subscription_id_num:
-                        break
-            
             end_time_saved_sub = '%sT00:00:00.000000Z' % ((datetime.now()).strftime("%Y-%m-%d"))
 
         elif self.date_range:
@@ -674,14 +720,16 @@ class AzureDataDumper(DataDumper):
             final_time = '%sT00:00:00.000000Z' % ((datetime.now()).strftime("%Y-%m-%d"))
 
         for i in range(subscription_id_num, len(self.subscription_id_list)):
+            with open(sub_statefile, 'w') as f:
+                f.write(f'{subscription_id_num}')
             try:
                 if save_state:
-                    self.auxillary_activity_log(savestate_times[subscription_id_num], end_time_saved_sub, statefile, i)
+                    self.auxillary_activity_log(start_time_saved_sub, end_time_saved_sub, i, statefile)
                     save_state = False
                 elif self.date_range:
-                    self.auxillary_activity_log(self.date_start, self.date_end, statefile, i)
+                    self.auxillary_activity_log(self.date_start, self.date_end, i, statefile)
                 else:
-                    self.auxillary_activity_log(start_date, final_time, statefile, i)
+                    self.auxillary_activity_log(start_date, final_time, i)
             
             except HttpResponseError as e:
                 print(e)
@@ -713,23 +761,24 @@ class AzureDataDumper(DataDumper):
                     try:
                         container_client = blob_service_client.get_container_client(container=container_name)
                         counter = 0
+                        start_date = utc.localize((datetime.now() - timedelta(days=90)))
                         for blob in container_client.list_blobs():
-                            downloader = container_client.download_blob(blob)
-                            output = os.path.join(output_dir, "log_" + str(counter) + ".json")
-                            if log_type == "nsg_flow":
-                                data = json.loads(downloader.readall().decode(("utf-8")))
-                                with open(output, 'a+', encoding='utf-8') as f:
-                                    for record in data['records']:
-                                        f.write(json.dumps(record))
-                                        f.write("\n")
-
-                            else:
-                                data = downloader.readall().decode(("utf-8"))
-                                lines = data.split("\n")
-                                with open(output, 'a+', encoding='utf-8') as f:
-                                    for entry in lines:
-                                        f.write(entry)
-                            counter+=1
+                            if start_date < blob.last_modified:
+                                downloader = container_client.download_blob(blob)
+                                output = os.path.join(output_dir, "log_" + str(counter) + ".json")
+                                if log_type == "nsg_flow":
+                                    data = json.loads(downloader.readall().decode(("utf-8")))
+                                    with open(output, 'a+', encoding='utf-8') as f:
+                                        for record in data['records']:
+                                            f.write(json.dumps(record))
+                                            f.write("\n")
+                                else:
+                                    data = downloader.readall().decode(("utf-8"))
+                                    lines = data.split("\n")
+                                    with open(output, 'a+', encoding='utf-8') as f:
+                                        for entry in lines:
+                                            f.write(entry)
+                                counter+=1
                         
                     except HttpResponseError as e:
                         self.logger.debug(log_type + " log not present in " + account + " continuing.")

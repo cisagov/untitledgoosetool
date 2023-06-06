@@ -1,0 +1,164 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.4.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:e3f22225-e0a8-4ff7-a369-f50caa3e15fb",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2023-06-02T10:38:52-04:00",
+    "tools": [
+      {
+        "vendor": "anchore",
+        "name": "syft",
+        "version": "0.82.0"
+      }
+    ],
+    "component": {
+      "bom-ref": "1964c4ec04b45222",
+      "type": "file",
+      "name": "./untitledgoosetool"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:pypi/gooey@1.0.8.1?package-id=36270366523988d",
+      "type": "library",
+      "name": "Gooey",
+      "version": "1.0.8.1",
+      "cpe": "cpe:2.3:a:python-Gooey:python-Gooey:1.0.8.1:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/Gooey@1.0.8.1",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-Gooey:python_Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_Gooey:python-Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_Gooey:python_Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:Gooey:python-Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:Gooey:python_Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-Gooey:Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_Gooey:Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:Gooey:Gooey:1.0.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "setup.py"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/aiohttp@3.8.1?package-id=2d83bd819e2e7cb0",
+      "type": "library",
+      "name": "aiohttp",
+      "version": "3.8.1",
+      "cpe": "cpe:2.3:a:python-aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/aiohttp@3.8.1",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:aiohttp:3.8.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "setup.py"
+        }
+      ]
+    }
+  ]
+}

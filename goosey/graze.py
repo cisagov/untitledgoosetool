@@ -5,25 +5,26 @@
 This module performs data collection time bound extraction of UAL thresholds.
 """
 
-import configparser
-import warnings
 import argparse
-import requests
-import json 
-import sys
-from urllib.parse import unquote
-from datetime import datetime, timedelta
-import random 
-import os
-import time
+import configparser
 import fnmatch
-import re
 import getpass
+import json 
+import os
 import pyAesCrypt
+import random 
+import re
+import requests
+import sys
+import time
+import warnings
+
+from datetime import datetime, timedelta
 from goosey.utils import *
+from urllib.parse import unquote
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 warnings.simplefilter('ignore')
 
