@@ -198,6 +198,8 @@ The barebones config looks like:
 [config]
 tenant=
 us_government=
+mde_gcc=
+mde_gcc_high=
 exo_us_government=
 subscriptionid=
 m365=
@@ -260,6 +262,7 @@ ual=False
 
 [mde]
 advanced_hunting_query=False
+advanced_identity_hunting_query=False
 alerts=False
 indicators=False
 investigations=False
@@ -286,6 +289,8 @@ Here is a conf file with descriptions of the fields:
 [config]
 tenant=The tenant ID of your AAD tenant.
 us_government=If you have a GCC High tenant, set this to True, otherwise set this to False.
+mde_gcc=If you have a GCC tenant with MDE, set this to True, otherwise set this to False.
+mde_gcc_high=If you have a GCC High tenant with MDE, set this to True, otherwise set this to False.
 exo_us_government=If your M365 tenant is a government tenant, set this to True, otherwise set this to False.
 subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces.
 m365=If you have a M365 environment, set this to True, otherwise set this to False.
@@ -348,6 +353,7 @@ ual=False
 
 [mde]
 advanced_hunting_query=False
+advanced_identity_hunting_query=False
 alerts=False
 indicators=False
 investigations=False
