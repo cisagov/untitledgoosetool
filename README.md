@@ -45,7 +45,7 @@ For more guidance on how to use Untitled Goose Tool, please see: [Untitled Goose
 ## Getting Started
 
 ### Prerequisites
-Python 3.7, 3.8, 3.9, or 3.10 (up to 3.10.10) is required to run Untitled Goose Tool with Python. Python 3.10.11 is currently being tested.
+Python 3.7, 3.8, 3.9, or 3.10 (up to 3.10.11) is required to run Untitled Goose Tool with Python. 
 
 Firefox is required for authenticating with Untitled Goose Tool.
 
@@ -684,9 +684,9 @@ $ goosey messagetrace --gather-report --interactive
 
     ```sh
     #For Windows:
-    webdrivermanager firefox:v0.32.0 --linkpath AUTO
+    webdrivermanager firefox:v0.33.0 --linkpath AUTO
     #For *nix recommend install outside of a virtual environment if you are working in one (you might need sudo):
-    webdrivermanager firefox:v0.32.0 --linkpath /usr/local/bin
+    webdrivermanager firefox:v0.33.0 --linkpath /usr/local/bin
     ```
 
 7. Excessive amount of 429 errors during `goosey honk`

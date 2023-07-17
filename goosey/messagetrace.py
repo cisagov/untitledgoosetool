@@ -40,7 +40,7 @@ goosey messagetrace --gather-report
 '''
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 logger = None
 encryption_pw = None
@@ -285,7 +285,8 @@ class MessageTrace():
         if not self.headless:
             opts.add_argument("--headless")
 
-        browser = webdriver.Firefox(firefox_profile=ffprofile,options=opts)
+        opts.profile = ffprofile
+        browser = webdriver.Firefox(options=opts)
 
         try:
             if browser:
@@ -308,27 +309,103 @@ class MessageTrace():
                 WebDriverWait(browser, 60).until(EC.element_to_be_clickable(PASSWORDFIELD)).send_keys(self.password)
                 
                 WebDriverWait(browser, 60).until(EC.element_to_be_clickable(NEXTBUTTON)).click()
-                
+
                 try:
                     WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'passwordError')))
                     browser.quit()
-                    sys.exit("Incorrect password. Please correct it and try again.")  
+                    sys.exit("Messagetrace user authentication - Incorrect password. Please correct it and try again.")  
                 except Exception as e:
                     pass    
             
                 try:
                     WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
                     browser.quit()
-                    sys.exit("Password reset required. Change your password and try again.")
+                    sys.exit("Messagetrace user authentication - Password reset required. Change your password and try again.")
                 except Exception as e:
                     pass
 
                 try:
                     WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'idDiv_SAASDS_Title')))
                     browser.quit()
-                    sys.exit("Declined MFA. Please correct it and try again.") 
+                    sys.exit("Messagetrace user authentication - Declined MFA. Please correct it and try again.") 
                 except Exception as e:
-                    pass 
+                    pass
+
+                try:
+                    if "Your organization needs more information to keep your account secure" in browser.find_element(By.ID, "ProofUpDescription").text:
+                        browser.quit()
+                        sys.exit("Messagetrace user authentication - Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
+                except Exception as e:
+                    pass    
+
+                try:
+                    if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                        self.logger.debug("Messagetrace user authentication - Push notification MFA detected.")
+
+                        if browser.find_element(By.ID, "idRichContext_DisplaySign"):
+                            self.logger.debug("Messagetrace user authentication - Number matching MFA detected.")
+                            mfa_code = browser.find_element(By.ID, "idRichContext_DisplaySign").text
+                            self.logger.info("Messagetrace user authentication - Your MFA code is: " + str(mfa_code))
+                            time.sleep(10)
+
+                        time.sleep(20)
+
+                        if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
+                            self.logger.info("Messagetrace user authentication - The MFA request was not approved in time.")
+                            browser.quit()
+                            sys.exit(1)                        
+                except Exception as e:
+                    pass
+
+                try:
+                    if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                        self.logger.debug("Messagetrace user authentication - OTP MFA detected.")
+
+                        if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                            OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                            OTP_code = getpass.getpass("Messagetrace user authentication - Please type your OTP code: ")
+                            verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                        
+                        if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                            errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                            self.logger.error("Messagetrace user authentication - OTP error message: " + errormsg)
+                            browser.quit()
+                            sys.exit("Messagetrace user authentication - MFA failed. Please see OTP error message and try again.")                    
+                except Exception as e:
+                    pass
+
+                try:
+                    if "Verify your identity" in browser.find_element(By.ID, "idDiv_SAOTCS_Title").text:
+                        self.logger.debug("Messagetrace user authentication - Other MFA detected.")
+
+                        if "Text" in browser.find_element(By.ID, "idDiv_SAOTCS_Proofs_Section").text:
+                            self.logger.debug("Messagetrace user authentication - Text option found.")
+                            sms = (By.ID, "idDiv_SAOTCS_Proofs_Section")
+                            WebDriverWait(browser, 60).until(EC.element_to_be_clickable(sms)).click()
+                            self.logger.debug("Messagetrace user authentication - SMS OTP requested.")
+                            time.sleep(10)
+
+                            if "Enter code" in browser.find_element(By.ID, "idDiv_SAOTCC_Title").text:
+                                self.logger.debug("Messagetrace user authentication - SMS OTP MFA detected.")
+
+                                if browser.find_element(By.ID, "idTxtBx_SAOTCC_OTC"):
+                                    OTP = (By.ID, "idTxtBx_SAOTCC_OTC")
+                                    OTP_code = getpass.getpass("Messagetrace user authentication - Please type your OTP code: ")
+                                    verify = (By.ID, "idSubmit_SAOTCC_Continue")
+
+                                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(OTP)).send_keys(OTP_code)
+                                    WebDriverWait(browser, 60).until(EC.element_to_be_clickable(verify)).click()
+                                
+                                if browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC"):
+                                    errormsg = browser.find_element(By.ID, "idDiv_SAOTCC_ErrorMsg_OTC").text
+                                    self.logger.error("Messagetrace user authentication - OTP error message: " + errormsg)
+                                    browser.quit()
+                                    sys.exit("Messagetrace user authentication - MFA failed. Please see OTP error message and try again.")                          
+                except Exception as e:
+                    pass
 
                 # Stay signed in
                 try:

@@ -29,7 +29,7 @@ from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 utc = pytz.UTC
 
@@ -214,7 +214,8 @@ class AzureDataDumper(DataDumper):
                     result = await r.json()
                     if 'error' in result:
                         if result['error']['code'] == 'NotFound':
-                            self.logger.debug("Resource not found. Proceeding")
+                            self.logger.debug("Resource not found. Exiting.")
+                            return
                         elif result['error']['code'] == 'ExpiredAuthenticationToken':
                             self.logger.error("Error with authentication token: " + result['error']['message'])
                             self.logger.error("Please re-auth.")
@@ -639,7 +640,7 @@ class AzureDataDumper(DataDumper):
                                 f.write("\n")
                                 f.flush()
                                 os.fsync(f)
-                
+                self.logger.info('Finished getting all Azure storage account information for ' + sub_id + '.')
             except HttpResponseError:
                 self.logger.debug("Caught HTTP Response Error on subscription " + sub_id)
                 continue

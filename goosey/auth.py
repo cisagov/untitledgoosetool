@@ -27,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from seleniumwire import webdriver
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 green = "\x1b[1;32m"
 
@@ -195,6 +195,20 @@ class Authentication():
                 pass
 
             try:
+                if "Your sign-in was successful but does not meet the criteria to access this resource" in browser.find_element(By.ID, "ErrorDescription").text:
+                    browser.quit()
+                    sys.exit("Device code authentication - Your sign-in was successful but does not meet the criteria to access this resource. For example, you might be signing in from a browser, app, or location that is restricted by your admin. Make sure to meet your conditional access policies and try again.")
+            except Exception as e:
+                pass
+
+            try:
+                if "Your account is at risk" in browser.find_element(By.ID, "landingTitle").text:
+                    browser.quit()
+                    sys.exit("Device code authentication - Your account is at risk. Please investigate this issue and try again.")
+            except Exception as e:
+                pass
+
+            try:
                 if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
                     self.logger.debug("Device code authentication - Push notification MFA detected.")
 
@@ -260,6 +274,13 @@ class Authentication():
                                 self.logger.error("Device code authentication - OTP error message: " + errormsg)
                                 browser.quit()
                                 sys.exit("Device code authentication - MFA failed. Please see OTP error message and try again.")                          
+            except Exception as e:
+                pass
+
+            try:
+                WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
+                browser.quit()
+                sys.exit("Device code authentication - Password reset required. Change your password and try again.")
             except Exception as e:
                 pass
 
@@ -379,7 +400,21 @@ class Authentication():
                             browser.quit()
                             sys.exit("M365 user authentication - Your organization needs more information to keep your account secure. Manually fix this problem and try again.")
                     except Exception as e:
-                        pass    
+                        pass
+
+                    try:
+                        if "Your sign-in was successful but does not meet the criteria to access this resource" in browser.find_element(By.ID, "ErrorDescription").text:
+                            browser.quit()
+                            sys.exit("M365 user authentication - Your sign-in was successful but does not meet the criteria to access this resource. For example, you might be signing in from a browser, app, or location that is restricted by your admin. Make sure to meet your conditional access policies and try again.")
+                    except Exception as e:
+                        pass
+
+                    try:
+                        if "Your account is at risk" in browser.find_element(By.ID, "landingTitle").text:
+                            browser.quit()
+                            sys.exit("M365 user authentication - Your account is at risk. Please investigate this issue and try again.")
+                    except Exception as e:
+                        pass
 
                     try:
                         if "Approve sign in request" in browser.find_element(By.ID, "idDiv_SAOTCAS_Title").text:
@@ -452,6 +487,15 @@ class Authentication():
 
                     time.sleep(5)
 
+                    try:
+                        WebDriverWait(browser, 3).until(EC.presence_of_element_located((By.ID, 'ChangePasswordDescription')))
+                        browser.quit()
+                        sys.exit("Device code authentication - Password reset required. Change your password and try again.")
+                    except Exception as e:
+                        pass                    
+
+                    time.sleep(5)
+
                     # Switch to second tab
                     browser.execute_script("window.open('');")
                     browser.switch_to.window(browser.window_handles[1])
@@ -476,18 +520,14 @@ class Authentication():
                     browser.switch_to.window(browser.window_handles[2])
                     self.logger.debug("Opening third tab: Admin Exchange Portal")
                     if self.exo_us_government == 'false':
-                        browser.get("https://admin.exchange.microsoft.com/")
+                        browser.get("https://admin.exchange.microsoft.com/#/messagetrace")
                         try:
-                            WebDriverWait(browser, 20).until(EC.url_matches('https://admin.exchange.microsoft.com/#/'))
-                            browser.get("https://admin.exchange.microsoft.com/#/messagetrace")
                             WebDriverWait(browser, 20).until((EC.url_matches('https://admin.exchange.microsoft.com/#/messagetrace')))
                         except Exception as e:
                             pass
                     elif self.exo_us_government == 'true':
                         browser.get("http://admin.exchange.office365.us/#/messagetrace")
                         try:
-                            WebDriverWait(browser, 20).until(EC.url_matches('https://admin.exchange.microsoft.us/#/'))
-                            browser.get("https://admin.exchange.microsoft.us/#/messagetrace")
                             WebDriverWait(browser, 20).until((EC.url_matches('https://admin.exchange.microsoft.us/#/messagetrace')))
                         except Exception as e:
                             pass
@@ -540,12 +580,9 @@ class Authentication():
                         self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
 
                     for request in browser.requests:
-                        if self.exo_us_government == 'false':
-                            if request.url == "https://admin.exchange.microsoft.com/beta/UserProfile":
-                                self.tokendata['validationkey'] = request.headers['validationkey']
-                        else:
-                            if request.url == "https://admin.exchange.microsoft.us/beta/UserProfile":
-                                self.tokendata['validationkey'] = request.headers['validationkey']
+                        if request.headers['validationkey']:
+                            self.tokendata['validationkey'] = request.headers['validationkey']
+                            break
 
                     if not self.tokendata['validationkey']:
                         self.logger.error("Error obtaining validationkey.")
@@ -662,6 +699,10 @@ class Authentication():
             self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
             self.subscriptions = config_get(config, 'config', 'subscriptionid', self.logger)
             self.m365 = config_get(config, 'config', 'm365', self.logger).lower()
+
+            if self.us_government == '' or self.mde_gcc == '' or self.mde_gcc_high == '' or self.tenant == '' or self.exo_us_government == '' or self.subscriptions == '' or self.m365 == '':
+                self.logger.error("Empty contents within .conf file. Please edit and try again.")
+                sys.exit(1)
         else:
             self.d4iot_sensor_ip = config_get(config, 'config', 'd4iot_sensor_ip', self.logger)
             self.d4iot_mgmt_ip = config_get(config, 'config', 'd4iot_mgmt_ip', self.logger)

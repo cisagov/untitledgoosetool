@@ -15,7 +15,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 class AzureAdDataDumper(DataDumper):
 

@@ -2,26 +2,26 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.4.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:e3f22225-e0a8-4ff7-a369-f50caa3e15fb",
+  "serialNumber": "urn:uuid:2901c5d5-f1ee-49b1-bc86-243bd25781bb",
   "version": 1,
   "metadata": {
-    "timestamp": "2023-06-02T10:38:52-04:00",
+    "timestamp": "2023-07-17T15:38:39-04:00",
     "tools": [
       {
         "vendor": "anchore",
         "name": "syft",
-        "version": "0.82.0"
+        "version": "0.85.0"
       }
     ],
     "component": {
-      "bom-ref": "1964c4ec04b45222",
+      "bom-ref": "9f51c64f49e33ff9",
       "type": "file",
-      "name": "./untitledgoosetool"
+      "name": "untitledgoosetool"
     }
   },
   "components": [
     {
-      "bom-ref": "pkg:pypi/gooey@1.0.8.1?package-id=36270366523988d",
+      "bom-ref": "pkg:pypi/gooey@1.0.8.1?package-id=2e8725a6135b4f82",
       "type": "library",
       "name": "Gooey",
       "version": "1.0.8.1",
@@ -86,17 +86,17 @@
         },
         {
           "name": "syft:location:0:path",
-          "value": "setup.py"
+          "value": "/setup.py"
         }
       ]
     },
     {
-      "bom-ref": "pkg:pypi/aiohttp@3.8.1?package-id=2d83bd819e2e7cb0",
+      "bom-ref": "pkg:pypi/aiohttp@3.8.4?package-id=cb709e196c491694",
       "type": "library",
       "name": "aiohttp",
-      "version": "3.8.1",
-      "cpe": "cpe:2.3:a:python-aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*",
-      "purl": "pkg:pypi/aiohttp@3.8.1",
+      "version": "3.8.4",
+      "cpe": "cpe:2.3:a:python-aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/aiohttp@3.8.4",
       "properties": [
         {
           "name": "syft:package:foundBy",
@@ -112,51 +112,273 @@
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python-aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python_aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:aiohttp:3.8.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:aiohttp:3.8.4:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:location:0:path",
-          "value": "setup.py"
+          "value": "/setup.py"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/colored@1.4.4?package-id=c7b0fb9bcccd72da",
+      "type": "library",
+      "name": "colored",
+      "version": "1.4.4",
+      "cpe": "cpe:2.3:a:python-colored:python-colored:1.4.4:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/colored@1.4.4",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-colored:python_colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_colored:python-colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_colored:python_colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:colored:python-colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:colored:python_colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-colored:colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_colored:colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:colored:colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:colored:1.4.4:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "/setup.py"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/cryptography@41.0.1?package-id=9b4891146eaf3965",
+      "type": "library",
+      "name": "cryptography",
+      "version": "41.0.1",
+      "cpe": "cpe:2.3:a:python-cryptography_project:python-cryptography:41.0.1:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/cryptography@41.0.1",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-cryptography_project:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-cryptography_project:cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:cryptography:41.0.1:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "/setup.py"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/selenium@4.10.0?package-id=6ba25d40458e5d0a",
+      "type": "library",
+      "name": "selenium",
+      "version": "4.10.0",
+      "cpe": "cpe:2.3:a:python-selenium:python-selenium:4.10.0:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/selenium@4.10.0",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-selenium:python_selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_selenium:python-selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_selenium:python_selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-selenium:selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_selenium:selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:selenium:python-selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:selenium:python_selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:selenium:selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:selenium:4.10.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "/setup.py"
         }
       ]
     }

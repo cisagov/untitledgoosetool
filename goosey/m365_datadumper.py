@@ -23,7 +23,7 @@ from goosey.utils import *
 from io import StringIO
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 class M365DataDumper(DataDumper):
 

@@ -20,18 +20,18 @@ Function Import-PSModules {
     If ($null -eq (Get-Module ExchangeOnlineManagement -ListAvailable -ErrorAction SilentlyContinue)){
         Write-Host "Required module, ExchangeOnlineManagement, is not installed on the system."
         Write-Host "Installing ExchangeOnlineManagement from default repository"
-        Install-Module -Name ExchangeOnlineManagement -MinimumVersion 3.1.0 -Force -AllowClobber
+        Install-Module -Name ExchangeOnlineManagement -RequiredVersion 3.1.0  -Force -AllowClobber
         Write-Host "Importing ExchangeOnlineManagement"
-        Import-Module -Name ExchangeOnlineManagement -MinimumVersion 3.1.0 -Force
-    } ElseIf ($null -eq (Get-InstalledModule ExchangeOnlineManagement -MinimumVersion 2.0.5)) {
-        Write-Host "Outdated ExchangeOnlineManagement module is installed on the system."
+        Import-Module -Name ExchangeOnlineManagement -RequiredVersion 3.1.0 -Force
+    } ElseIf ($null -eq (Get-InstalledModule ExchangeOnlineManagement -RequiredVersion 3.1.0)) {
+        Write-Host "Incorrect version of ExchangeOnlineManagement module is installed on the system."
         Write-Host "Installing ExchangeOnlineManagement from default repository"
-        Install-Module -Name ExchangeOnlineManagement -MinimumVersion 3.1.0 -Force -AllowClobber
+        Install-Module -Name ExchangeOnlineManagement -RequiredVersion 3.1.0 -Force -AllowClobber
         Write-Host "Importing ExchangeOnlineManagement"
-        Import-Module -Name ExchangeOnlineManagement -MinimumVersion 3.1.0 -Force
+        Import-Module -Name ExchangeOnlineManagement -RequiredVersion 3.1.0 -Force
     } Else {
         Write-Host "Importing ExchangeOnlineManagement"
-        Import-Module -Name ExchangeOnlineManagement -MinimumVersion 3.1.0 -Force
+        Import-Module -Name ExchangeOnlineManagement -RequiredVersion 3.1.0 -Force
     }
 
     #If you want to change the default export directory, please change the $ExportDir value.
