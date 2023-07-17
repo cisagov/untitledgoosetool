@@ -5,6 +5,7 @@
 This module performs data collection of various data sources from an Azure/M365 environment.
 """
 
+from mimetypes import init
 import aiohttp
 import argparse
 import asyncio
@@ -25,7 +26,7 @@ from goosey.mde_datadumper import MDEDataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -92,7 +93,7 @@ def getargs(honk_parser) -> None:
                                 help='Set all of the MDE calls to true',
                                 default=False)
 
-async def run(args, config, auth, auth_un_pw=None):
+async def run(args, config, auth, init_sections, auth_un_pw=None):
     """Main async run loop
 
     :param args: argparse object with populated namespace
@@ -124,26 +125,40 @@ async def run(args, config, auth, auth_un_pw=None):
             msft_security_auth = auth['app_auth'][key]
 
     maindumper = DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, session, args.debug)
+    
+    m365, azuread, azure, mde = False, False, False, False
 
     if args.dry_run:
         m365dumper = maindumper 
         azureaddumper = maindumper
         azure_dumper = maindumper
         mdedumper = maindumper
+
     else:
-        m365dumper = M365DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
-        azureaddumper = AzureAdDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
-        azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, auth_un_pw, args.debug)
-        mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_security_center_auth, msft_security_auth, maindumper.ahsession, config, args.debug)
+        if 'm365' in init_sections:
+            m365dumper = M365DataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
+            m365 = True
+        if 'azuread' in init_sections:
+            azureaddumper = AzureAdDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_graph_app_auth, maindumper.ahsession, config, args.debug)
+            azuread = True
+        if 'azure' in init_sections:
+            azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, auth_un_pw, args.debug)
+            azure = True
+        if 'mde' in init_sections:
+            mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_graph_auth, msft_security_center_auth, msft_security_auth, maindumper.ahsession, config, args.debug)
+            mde = True
 
     async with maindumper.ahsession as ahsession:
-
         tasks = []
-        tasks.extend(azure_dumper.data_dump(data_calls['azure']))
-        tasks.extend(m365dumper.data_dump(data_calls['m365']))
-        tasks.extend(azureaddumper.data_dump(data_calls['azuread']))
-        tasks.extend(mdedumper.data_dump(data_calls['mde']))
-        
+        if m365:
+            tasks.extend(m365dumper.data_dump(data_calls['m365']))
+        if azuread:
+            tasks.extend(azureaddumper.data_dump(data_calls['azuread']))
+        if azure:
+            tasks.extend(azure_dumper.data_dump(data_calls['azure']))
+        if mde:
+            tasks.extend(mdedumper.data_dump(data_calls['mde']))
+
         await asyncio.gather(*tasks)
 
 def _get_section_dict(config, s):
@@ -163,12 +178,14 @@ def parse_config(configfile, args, auth=None):
     else:
         sections = ['auth']    
 
+    init_sections = []
     for section in sections:
         d = _get_section_dict(config, section)
         data_calls[section] = {}
         for key in d:
             if d[key]:
                 data_calls[section][key] = True
+                init_sections.append(section)
     
     if args.azure:
         for item in [x.replace('dump_', '') for x in dir(AzureDataDumper) if x.startswith('dump_')]:
@@ -184,7 +201,7 @@ def parse_config(configfile, args, auth=None):
             data_calls['mde'][item] = True
 
     logger.debug(json.dumps(data_calls, indent=2))
-    return config
+    return config, init_sections
         
 def main(args=None, gui=False) -> None:
     global logger
@@ -228,7 +245,7 @@ def main(args=None, gui=False) -> None:
         if os.path.isfile(args.auth):
             logger.info("Reading in auth: {}".format(args.auth))
             with open(args.auth, 'r') as infile:
-                auth_un_pw = parse_config(args.auth, args, auth=True)
+                auth_un_pw, _ = parse_config(args.auth, args, auth=True)
         else:
             auth_un_pw = None
     except Exception as e:
@@ -274,12 +291,12 @@ def main(args=None, gui=False) -> None:
     check_output_dir(f'{args.output_dir}{os.path.sep}m365', logger)
     check_output_dir(f'{args.output_dir}{os.path.sep}azuread', logger)
     check_output_dir(f'{args.output_dir}{os.path.sep}mde', logger)
-    config = parse_config(args.config, args)
+    config, init_sections = parse_config(args.config, args)
 
     logger.info("Goosey beginning to honk.")
     seconds = time.perf_counter()
     try:
-        asyncio.run(run(args, config, auth, auth_un_pw))
+        asyncio.run(run(args, config, auth, init_sections, auth_un_pw=auth_un_pw))
     except RuntimeError as e:
         sys.exit(1)
     elapsed = time.perf_counter() - seconds

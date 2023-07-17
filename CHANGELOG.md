@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] - The goose is loose - 2023-07-17
+### Added
+- Better catches for when password for the account needs to be updated, when a conditional access policy blocks user account access, or when the user account is flagged for risky actions.
+- Added catch for empty `.conf` fields, will allow more graceful exiting. 
+
+### Changed
+- Updated and pinned `aiohttp`, `colored`, `cryptography`, and `selenium` dependencies and updated Python version to 3.10.11.
+- Pinned 3.1.0 version of ExchangeOnlineManagement PowerShell module.
+- Improved logic for grabbing `validationkey` from requests.
+
+### Fixed
+- Fixed MFA logic for messagetrace.py.
+- Fixed data dumper logic, they will only run if something in their section is set to `True`.
+
 ## [1.2.1] - The goose is loose - 2023-06-06
 ### Added
 - Implemented new tables to be pulled from MDE.
