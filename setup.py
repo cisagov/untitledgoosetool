@@ -19,7 +19,7 @@ setup(name='goosey',
       packages=['goosey'],
       python_requires='>=3.7,<=3.10.11',
       install_requires=[
-          'cryptography==41.0.1',
+          'cryptography==41.0.2',
           'requests',
           'webdrivermanager',
           'aiohttp==3.8.4',
