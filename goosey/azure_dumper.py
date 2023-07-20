@@ -29,7 +29,7 @@ from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.2"
+__version__ = "1.2.3"
 
 utc = pytz.UTC
 
