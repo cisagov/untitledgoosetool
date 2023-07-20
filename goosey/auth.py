@@ -27,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from seleniumwire import webdriver
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.2"
+__version__ = "1.2.3"
 
 green = "\x1b[1;32m"
 

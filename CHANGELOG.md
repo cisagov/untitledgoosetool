@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.3] - The goose is loose - 2023-07-20
+### Added
+
+### Changed
+- Updated `cryptography` and `aiohttp` based on dependabot.
+- Updated SBOM files.
+
+### Fixed
+
 ## [1.2.2] - The goose is loose - 2023-07-17
 ### Added
 - Better catches for when password for the account needs to be updated, when a conditional access policy blocks user account access, or when the user account is flagged for risky actions.

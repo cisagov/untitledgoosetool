@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.4.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:2901c5d5-f1ee-49b1-bc86-243bd25781bb",
+  "serialNumber": "urn:uuid:da04caa5-5c97-4a60-847f-066f7e1d562c",
   "version": 1,
   "metadata": {
-    "timestamp": "2023-07-17T15:38:39-04:00",
+    "timestamp": "2023-07-20T15:22:04-04:00",
     "tools": [
       {
         "vendor": "anchore",
@@ -91,12 +91,12 @@
       ]
     },
     {
-      "bom-ref": "pkg:pypi/aiohttp@3.8.4?package-id=cb709e196c491694",
+      "bom-ref": "pkg:pypi/aiohttp@3.8.5?package-id=9d93d206197cbdde",
       "type": "library",
       "name": "aiohttp",
-      "version": "3.8.4",
-      "cpe": "cpe:2.3:a:python-aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*",
-      "purl": "pkg:pypi/aiohttp@3.8.4",
+      "version": "3.8.5",
+      "cpe": "cpe:2.3:a:python-aiohttp:python-aiohttp:3.8.5:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/aiohttp@3.8.5",
       "properties": [
         {
           "name": "syft:package:foundBy",
@@ -112,47 +112,47 @@
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-aiohttp:python_aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:python-aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:python_aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:python-aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:python_aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-aiohttp:aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_aiohttp:aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python-aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python-aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python_aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python_aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:aiohttp:aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:aiohttp:aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:aiohttp:3.8.4:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:aiohttp:3.8.5:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:location:0:path",
@@ -231,12 +231,12 @@
       ]
     },
     {
-      "bom-ref": "pkg:pypi/cryptography@41.0.1?package-id=9b4891146eaf3965",
+      "bom-ref": "pkg:pypi/cryptography@41.0.2?package-id=ec857cc0e0d2bac4",
       "type": "library",
       "name": "cryptography",
-      "version": "41.0.1",
-      "cpe": "cpe:2.3:a:python-cryptography_project:python-cryptography:41.0.1:*:*:*:*:*:*:*",
-      "purl": "pkg:pypi/cryptography@41.0.1",
+      "version": "41.0.2",
+      "cpe": "cpe:2.3:a:python-cryptography_project:python-cryptography:41.0.2:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/cryptography@41.0.2",
       "properties": [
         {
           "name": "syft:package:foundBy",
@@ -252,59 +252,59 @@
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-cryptography_project:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-cryptography_project:python_cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-cryptography_project:cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-cryptography_project:cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:cryptography:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:cryptography:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python-cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python-cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python_cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python_cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python-cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python-cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:python_cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:python_cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:cryptography:cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:cpe23",
-          "value": "cpe:2.3:a:python:cryptography:41.0.1:*:*:*:*:*:*:*"
+          "value": "cpe:2.3:a:python:cryptography:41.0.2:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:location:0:path",

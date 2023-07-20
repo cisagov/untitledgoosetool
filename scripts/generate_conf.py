@@ -12,7 +12,7 @@ from goosey.azure_dumper import AzureDataDumper
 from goosey.mde_datadumper import MDEDataDumper
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.2"
+__version__ = "1.2.3"
 
 def main():
     auth_s = '[auth]\nusername=\npassword=\nappid=\nclientsecret=\n\n'
