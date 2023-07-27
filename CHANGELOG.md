@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.4] - The goose is loose - 2023-07-27
+### Added
+
+### Changed
+- Updated and pinned `MSAL` dependencies.
+
+### Fixed
+- Updated `validationkey` logic for m365 authentication.
+- Updated `MSAL` calls to align with the `MSAL` 1.23.0 change.
+
 ## [1.2.3] - The goose is loose - 2023-07-20
 ### Added
 
