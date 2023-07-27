@@ -29,7 +29,7 @@ from re import S, sub
 from typing import NewType, Optional
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 
 utc = pytz.UTC
 
@@ -193,7 +193,6 @@ class AzureDataDumper(DataDumper):
                         nexturl = None
                         if '@odata.nextLink' in result:
                             nexturl = result['@odata.nextLink']
-                            print("here")
                         if 'value' in result:
                             for x in result['value']:
                                 alert_ids.append(x['id'])

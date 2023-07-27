@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.4.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.4",
-  "serialNumber": "urn:uuid:da04caa5-5c97-4a60-847f-066f7e1d562c",
+  "serialNumber": "urn:uuid:1fd2d207-8341-4360-90f2-9ccbc917bb3c",
   "version": 1,
   "metadata": {
-    "timestamp": "2023-07-20T15:22:04-04:00",
+    "timestamp": "2023-07-27T18:14:16-04:00",
     "tools": [
       {
         "vendor": "anchore",
@@ -305,6 +305,76 @@
         {
           "name": "syft:cpe23",
           "value": "cpe:2.3:a:python:cryptography:41.0.2:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "/setup.py"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:pypi/msal@1.23.0?package-id=a06e645e01f805bc",
+      "type": "library",
+      "name": "msal",
+      "version": "1.23.0",
+      "cpe": "cpe:2.3:a:python-msal:python-msal:1.23.0:*:*:*:*:*:*:*",
+      "purl": "pkg:pypi/msal@1.23.0",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "python-index-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "python"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "python"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_msal:python-msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python-msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:python_msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:msal:python-msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python-msal:msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python_msal:msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:python:msal:1.23.0:*:*:*:*:*:*:*"
+        },
+        {
+          "name": "syft:cpe23",
+          "value": "cpe:2.3:a:msal:msal:1.23.0:*:*:*:*:*:*:*"
         },
         {
           "name": "syft:location:0:path",

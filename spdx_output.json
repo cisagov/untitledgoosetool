@@ -3,14 +3,14 @@
  "dataLicense": "CC0-1.0",
  "SPDXID": "SPDXRef-DOCUMENT",
  "name": "untitledgoosetool",
- "documentNamespace": "https://anchore.com/syft/dir/untitledgoosetool-a8310202-8a81-4393-b0af-5a42bf7240ba",
+ "documentNamespace": "https://anchore.com/syft/dir/untitledgoosetool-fb71fca3-04f2-4bf5-96a5-3f86fb8f8232",
  "creationInfo": {
   "licenseListVersion": "3.21",
   "creators": [
    "Organization: Anchore, Inc",
    "Tool: syft-0.85.0"
   ],
-  "created": "2023-07-20T19:22:04Z"
+  "created": "2023-07-27T22:14:15Z"
  },
  "packages": [
   {
@@ -341,6 +341,84 @@
    ]
   },
   {
+   "name": "msal",
+   "SPDXID": "SPDXRef-Package-python-msal-a06e645e01f805bc",
+   "versionInfo": "1.23.0",
+   "downloadLocation": "NOASSERTION",
+   "filesAnalyzed": false,
+   "sourceInfo": "acquired package info from installed python package manifest file: /setup.py",
+   "licenseConcluded": "NOASSERTION",
+   "licenseDeclared": "NOASSERTION",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python-msal:python-msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python-msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python_msal:python-msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python_msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python:python-msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python:python_msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:msal:python-msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:msal:python_msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python-msal:msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python_msal:msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:python:msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:msal:msal:1.23.0:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:pypi/msal@1.23.0"
+    }
+   ]
+  },
+  {
    "name": "selenium",
    "SPDXID": "SPDXRef-Package-python-selenium-6ba25d40458e5d0a",
    "versionInfo": "4.10.0",
@@ -448,6 +526,12 @@
   },
   {
    "spdxElementId": "SPDXRef-Package-python-aiohttp-9d93d206197cbdde",
+   "relatedSpdxElement": "SPDXRef-File-setup.py-c829033125510d5a",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
+   "spdxElementId": "SPDXRef-Package-python-msal-a06e645e01f805bc",
    "relatedSpdxElement": "SPDXRef-File-setup.py-c829033125510d5a",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"

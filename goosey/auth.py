@@ -27,7 +27,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from seleniumwire import webdriver
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 
 green = "\x1b[1;32m"
 
@@ -88,9 +88,9 @@ class Authentication():
         Returns the MFA Graph API resource URI for a commercial or government tenant.
         """
         if self.us_government == 'false':
-            return 'https://graph.microsoft.com/.default'
+            return ['https://graph.microsoft.com/.default']
         elif self.us_government == 'true':
-            return 'https://graph.microsoft.us/.default'
+            return ['https://graph.microsoft.us/.default']
 
     def get_app_resource_uri(self):
         """
@@ -119,7 +119,7 @@ class Authentication():
         self.logger.debug(f"Device code selenium resource uri: {str(resource_uri)}")
 
         context = msal.PublicClientApplication(client_id=self.app_client_id, authority=authority_host_uri)
-        code = context.initiate_device_flow(scopes=[resource_uri])
+        code = context.initiate_device_flow(scopes=resource_uri)
 
         self.logger.info('Attempting to automatically auth via device code. You may have to accept MFA prompts.')
 
@@ -317,11 +317,13 @@ class Authentication():
         self.logger.debug(f"App Authentication authority uri: {str(authority_uri)}")
         self.logger.debug(f"App authentication resource uri: {str(resource_uri)}")
         context = msal.ConfidentialClientApplication(client_id=self.app_client_id, client_credential=self.client_secret, authority=authority_uri)
-        self.tokendata = context.acquire_token_for_client(resource_uri)
+        self.tokendata = context.acquire_token_for_client(scopes=[resource_uri])
         if 'error' in self.tokendata:
             if self.tokendata['error'] == 'invalid_client':
                 self.logger.error("There was an issue with your application auth: " + self.tokendata['error_description'])
                 sys.exit(1)
+            else:
+                self.logger.error("There was an issue with your application auth: " + self.tokendata['error_description'])
         if 'expires_in' in self.tokendata:
             expiration_time = time.time() + self.tokendata['expires_in']
             self.tokendata['expires_on'] = expiration_time
@@ -341,12 +343,11 @@ class Authentication():
         PASSWORDFIELD = (By.ID, "i0118")
         NEXTBUTTON = (By.ID, "idSIButton9")
 
-        self.logger.info('Attempting to automatically auth as an user. You may have to accept MFA prompts.')
-
         browser = self.get_webdriver_browser()
 
         if self.m365 == 'true':
             self.logger.debug("M365 authentication set to True. Pulling authentication information.")
+            self.logger.info('Attempting to automatically auth as an user. You may have to accept MFA prompts.')
             try:
                 if browser:
                     if self.us_government == 'false':
@@ -579,13 +580,19 @@ class Authentication():
                     except Exception as e:
                         self.logger.error("Error obtaining " + cookie_str + ": " + str(e))
 
-                    for request in browser.requests:
-                        if request.headers['validationkey']:
-                            self.tokendata['validationkey'] = request.headers['validationkey']
-                            break
-
-                    if not self.tokendata['validationkey']:
-                        self.logger.error("Error obtaining validationkey.")
+                    try:
+                        validkey = None
+                        while validkey == None:
+                            count = 0
+                            for request in browser.requests:
+                                count += 1
+                                if request.headers['validationkey']:
+                                    self.logger.debug("Validationkey found! It took " + str(count) + " requests.")
+                                    validkey = request.headers['validationkey']
+                                    break
+                        self.tokendata['validationkey'] = validkey
+                    except Exception as e:
+                        self.logger.error("Error obtaining validationkey: " + str(e))
 
                     self.logger.info("Third tab: Obtained Exchange cookies.")               
 
@@ -871,7 +878,7 @@ class Authentication():
         custom_auth_dict['sdk_auth']['client_secret'] = self.client_secret         
         custom_auth_dict['sdk_auth']['subscriptionid'] = self.subscriptions 
 
-        uri = self.get_mfa_resource_uri()
+        uri = str(self.get_mfa_resource_uri())
 
         if self.tokendata:
             custom_auth_dict['mfa'][uri] = copy.copy(self.tokendata)

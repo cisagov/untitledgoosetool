@@ -6,7 +6,7 @@ elif sys.version_info >= (3,11):
 
 from setuptools import setup
 setup(name='goosey',
-      version='1.2.3',
+      version='1.2.4',
       description='AzureAD, Azure and M365 Data Collector',
       author='Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace',
       classifiers=[
@@ -38,7 +38,7 @@ setup(name='goosey',
           'azure-mgmt-security',
           'selenium==4.10.0',
           'selenium-wire',
-          'adal>=1.2.7',
+          'msal==1.23.0',
           'msrestazure',
           'Gooey==1.0.8.1',
           'typing-extensions>=4.1.1',
