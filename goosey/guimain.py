@@ -18,7 +18,7 @@ from gooey.gui import cli as gooey_gui_cli
 from goosey.main import main as gooseymain
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 try:
     from gooey import Gooey, GooeyParser
