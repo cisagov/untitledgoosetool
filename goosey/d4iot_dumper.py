@@ -12,7 +12,7 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 class DefenderIoTDumper(DataDumper):
     def __init__(self, output_dir, reports_dir, session, csrftoken, sessionid, config, auth_un_pw, debug):

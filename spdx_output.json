@@ -3,14 +3,14 @@
  "dataLicense": "CC0-1.0",
  "SPDXID": "SPDXRef-DOCUMENT",
  "name": "untitledgoosetool",
- "documentNamespace": "https://anchore.com/syft/dir/untitledgoosetool-fb71fca3-04f2-4bf5-96a5-3f86fb8f8232",
+ "documentNamespace": "https://anchore.com/syft/dir/untitledgoosetool-0b92e6f0-14c1-487f-9827-421cb233f513",
  "creationInfo": {
   "licenseListVersion": "3.21",
   "creators": [
    "Organization: Anchore, Inc",
-   "Tool: syft-0.85.0"
+   "Tool: syft-0.86.1"
   ],
-  "created": "2023-07-27T22:14:15Z"
+  "created": "2023-08-03T23:48:20Z"
  },
  "packages": [
   {
@@ -249,8 +249,8 @@
   },
   {
    "name": "cryptography",
-   "SPDXID": "SPDXRef-Package-python-cryptography-ec857cc0e0d2bac4",
-   "versionInfo": "41.0.2",
+   "SPDXID": "SPDXRef-Package-python-cryptography-30c4dfdade0e13a8",
+   "versionInfo": "41.0.3",
    "downloadLocation": "NOASSERTION",
    "filesAnalyzed": false,
    "sourceInfo": "acquired package info from installed python package manifest file: /setup.py",
@@ -261,82 +261,12 @@
     {
      "referenceCategory": "SECURITY",
      "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography_project:python-cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography_project:python_cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography_project:cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python_cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python_cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:cryptography:python-cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:cryptography:python_cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python-cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python_cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python:python-cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python:python_cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:cryptography:cryptography:41.0.2:*:*:*:*:*:*:*"
-    },
-    {
-     "referenceCategory": "SECURITY",
-     "referenceType": "cpe23Type",
-     "referenceLocator": "cpe:2.3:a:python:cryptography:41.0.2:*:*:*:*:*:*:*"
+     "referenceLocator": "cpe:2.3:a:python-cryptography_project:python-cryptography:41.0.3:*:*:*:*:*:*:*"
     },
     {
      "referenceCategory": "PACKAGE-MANAGER",
      "referenceType": "purl",
-     "referenceLocator": "pkg:pypi/cryptography@41.0.2"
+     "referenceLocator": "pkg:pypi/cryptography@41.0.3"
     }
    ]
   },
@@ -495,6 +425,13 @@
      "referenceLocator": "pkg:pypi/selenium@4.10.0"
     }
    ]
+  },
+  {
+   "name": "untitledgoosetool",
+   "SPDXID": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "downloadLocation": "",
+   "filesAnalyzed": false,
+   "primaryPackagePurpose": "FILE"
   }
  ],
  "files": [
@@ -514,6 +451,12 @@
  "relationships": [
   {
    "spdxElementId": "SPDXRef-Package-python-Gooey-2e8725a6135b4f82",
+   "relatedSpdxElement": "SPDXRef-File-setup.py-c829033125510d5a",
+   "relationshipType": "OTHER",
+   "comment": "evident-by: indicates the package's existence is evident by the given file"
+  },
+  {
+   "spdxElementId": "SPDXRef-Package-python-cryptography-30c4dfdade0e13a8",
    "relatedSpdxElement": "SPDXRef-File-setup.py-c829033125510d5a",
    "relationshipType": "OTHER",
    "comment": "evident-by: indicates the package's existence is evident by the given file"
@@ -543,14 +486,38 @@
    "comment": "evident-by: indicates the package's existence is evident by the given file"
   },
   {
-   "spdxElementId": "SPDXRef-Package-python-cryptography-ec857cc0e0d2bac4",
-   "relatedSpdxElement": "SPDXRef-File-setup.py-c829033125510d5a",
-   "relationshipType": "OTHER",
-   "comment": "evident-by: indicates the package's existence is evident by the given file"
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-Gooey-2e8725a6135b4f82",
+   "relationshipType": "CONTAINS"
+  },
+  {
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-aiohttp-9d93d206197cbdde",
+   "relationshipType": "CONTAINS"
+  },
+  {
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-colored-c7b0fb9bcccd72da",
+   "relationshipType": "CONTAINS"
+  },
+  {
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-cryptography-30c4dfdade0e13a8",
+   "relationshipType": "CONTAINS"
+  },
+  {
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-msal-a06e645e01f805bc",
+   "relationshipType": "CONTAINS"
+  },
+  {
+   "spdxElementId": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
+   "relatedSpdxElement": "SPDXRef-Package-python-selenium-6ba25d40458e5d0a",
+   "relationshipType": "CONTAINS"
   },
   {
    "spdxElementId": "SPDXRef-DOCUMENT",
-   "relatedSpdxElement": "SPDXRef-DOCUMENT",
+   "relatedSpdxElement": "SPDXRef-DocumentRoot-Directory-untitledgoosetool",
    "relationshipType": "DESCRIBES"
   }
  ]

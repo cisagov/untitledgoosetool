@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.5] - The goose is loose - 2023-08-04
+### Added
+
+### Changed
+- Updated `cryptography` to 41.0.3 based on dependabot.
+
+### Fixed
+- Incorporated fix for function `helper_multiple_object` when parent object contains a `/`
+- Updated authentication fix for graze.py and messagetrace.py
+
 ## [1.2.4] - The goose is loose - 2023-07-27
 ### Added
 

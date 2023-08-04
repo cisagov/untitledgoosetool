@@ -6,7 +6,7 @@ elif sys.version_info >= (3,11):
 
 from setuptools import setup
 setup(name='goosey',
-      version='1.2.4',
+      version='1.2.5',
       description='AzureAD, Azure and M365 Data Collector',
       author='Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace',
       classifiers=[
@@ -19,7 +19,7 @@ setup(name='goosey',
       packages=['goosey'],
       python_requires='>=3.7,<=3.10.11',
       install_requires=[
-          'cryptography==41.0.2',
+          'cryptography==41.0.3',
           'requests',
           'webdrivermanager',
           'aiohttp==3.8.5',

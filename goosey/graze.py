@@ -24,7 +24,7 @@ from goosey.utils import *
 from urllib.parse import unquote
 
 __author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 warnings.simplefilter('ignore')
 
@@ -272,9 +272,9 @@ def main(args=None) -> None:
         logger.info("Reading in authfile: {}".format(args.authfile))
         with open(args.authfile, 'r') as infile:
             if exo_us_government == 'false':
-                auth = json.loads(infile.read())['mfa']['https://graph.microsoft.com/.default']
+                auth = json.loads(infile.read())['mfa']["['https://graph.microsoft.com/.default']"]
             elif exo_us_government == 'true':
-                auth = json.loads(infile.read())['mfa']['https://graph.microsoft.us/.default']
+                auth = json.loads(infile.read())['mfa']["['https://graph.microsoft.us/.default']"]
     except Exception as e:
         logger.error("{}".format(str(e)))
         raise e
