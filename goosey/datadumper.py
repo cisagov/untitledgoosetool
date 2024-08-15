@@ -3,15 +3,12 @@
 
 from goosey.utils import *
 
-__author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.5"
-
 class DataDumper(object):
     def __init__(self, output_dir: str, reports_dir: str, auth: dict, app_auth: dict, session, debug):
         self.output_dir = output_dir
         self.reports_dir = reports_dir
         self.ahsession = session
-        self.auth = auth 
+        self.auth = auth
         self.app_auth = app_auth
         self.logger = setup_logger(__name__, debug)
 
@@ -29,12 +26,22 @@ class DataDumper(object):
         for key in calls:
             try:
                 func = getattr(self, 'dump_' + key)
+
             except Exception as e:
                 self.logger.debug("Did not find %s in dumper" % (key))
                 continue
             self.logger.debug("Calling %s" % (func))
-            tasks.append(func())
+            tasks.append(asyncio.create_task(self.func_wrapper(func), name=key))
         return tasks
+
+    async def func_wrapper(self, func):
+        error = None
+        try:
+            error = await func()
+        except Exception as e:
+            self.logger.debug(f"{func.__name__} Failed with error {e}", exc_info=1)
+            error = e
+        return self.__class__.__name__, func.__name__, error
 
     def __getattr__(self, attr):
         self.logger.info("[DRY RUN] Calling %s" % (attr))

@@ -15,14 +15,10 @@ import sys
 import time
 import warnings
 import getpass
-import pyAesCrypt
 
 from goosey.datadumper import DataDumper
 from goosey.d4iot_dumper import DefenderIoTDumper
 from goosey.utils import *
-
-__author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.5"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -63,7 +59,7 @@ def getargs(d4iot_parser) -> None:
     d4iot_parser.add_argument('--reports-dir',
                                action='store',
                                help='Output directory for output files',
-                               default='reports')                               
+                               default='reports')
     d4iot_parser.add_argument('--debug',
                                action='store_true',
                                help='Debug output',
@@ -114,7 +110,7 @@ async def run(args, config, auth, auth_un_pw=None):
     """
     global data_calls, logger
 
-    session = aiohttp.ClientSession()
+    session = aiohttp.ClientSession(trust_env=True)
     sessionid = None
     csrftoken = None
 
@@ -136,7 +132,7 @@ async def run(args, config, auth, auth_un_pw=None):
         tasks.extend(d4iot_dumper.data_dump(data_calls['d4iot']))
         await asyncio.gather(*tasks)
 
-def main(args=None, gui=False) -> None:
+def main(args=None) -> None:
     global logger, encryption_pw
 
     parser = argparse.ArgumentParser(add_help=True, description='Goosey', formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -146,74 +142,9 @@ def main(args=None, gui=False) -> None:
     if args is None:
         args = parser.parse_args()
 
-    if gui:
-        logger = setup_logger(__name__, args.debug, formatter='gui')
-    else:
-        logger = setup_logger(__name__, args.debug)
+    logger = setup_logger(__name__, args.debug)
 
-    auth = {}
-    encrypted = False
-    encrypted_auth = False
-    encrypted_authfile = False
-
-    dir_path = os.path.dirname(os.path.realpath(args.auth))
-    encrypted_auth = os.path.join(dir_path, args.auth + '.aes')
-
-    dir_path = os.path.dirname(os.path.realpath(args.authfile))
-    encrypted_authfile = os.path.join(dir_path, args.authfile + '.aes')
-
-    if os.path.isfile(encrypted_auth):
-        encrypted = True
-        if encryption_pw is None:
-            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
-
-        pyAesCrypt.decryptFile(encrypted_auth, args.auth, encryption_pw)
-        os.remove(encrypted_auth)
-        logger.debug("Decrypted the " + args.auth + " file!")
-
-    try:
-        if os.path.isfile(args.auth):
-            logger.info("Reading in auth: {}".format(args.auth))
-            with open(args.auth, 'r') as infile:
-                auth_un_pw = parse_config(args.auth, args, auth=True)
-        else:
-            auth_un_pw = None
-    except Exception as e:
-        logger.error("{}".format(str(e)))
-        raise e      
-
-    if encrypted:
-        if os.path.isfile(args.auth):
-            pyAesCrypt.encryptFile(args.auth, encrypted_auth, encryption_pw)
-            os.remove(args.auth)
-            logger.debug("Encrypted the " + args.auth + " file!")     
-
-    if os.path.isfile(encrypted_authfile):
-        encrypted_ugtauth = True
-        if encryption_pw is None:
-            encryption_pw = getpass.getpass("Please type the password for file encryption: ")
-
-        pyAesCrypt.decryptFile(encrypted_authfile, args.authfile, encryption_pw)
-        os.remove(encrypted_authfile)
-        logger.debug("Decrypted the " + args.authfile + " file!")
-
-    if not os.path.isfile(args.authfile):
-        logger.warning("{} auth file missing. Please auth first. Exiting.".format(args.authfile))
-        sys.exit(1)
-    
-    try:
-        logger.info("Reading in authfile: {}".format(args.authfile))
-        with open(args.authfile, 'r') as infile:
-            auth = json.loads(infile.read())
-    except Exception as e:
-        logger.error("{}".format(str(e)))
-        raise e
-
-    if encrypted_ugtauth:
-        if os.path.isfile(args.authfile):
-            pyAesCrypt.encryptFile(args.authfile, encrypted_authfile, encryption_pw)
-            os.remove(args.authfile)
-            logger.debug("Encrypted the " + args.authfile + " file!")    
+    auth_un_pw, auth = get_authfile(authfile=args.auth, ugt_authfile=args.authfile, logger=logger)
 
     check_output_dir(args.output_dir, logger)
     check_output_dir(args.reports_dir, logger)
@@ -225,6 +156,28 @@ def main(args=None, gui=False) -> None:
     asyncio.run(run(args, config, auth, auth_un_pw))
     elapsed = time.perf_counter() - seconds
     logger.info("Goosey executed in {0:0.2f} seconds.".format(elapsed))
+
+def d4iot(authfile=".d4iot_auth",
+          config=".d4iot_conf",
+          auth=".auth_d4iot",
+          output_dir="output",
+          reports_dir="reports",
+          debug=False,
+          dry_run=False):
+    """
+    Gather d4iot Information
+
+    Args:
+       authfile: File to read credentials from obtained by goosey auth
+       config: Path to config file
+       auth: Path to d4iot creds used for auth
+       output_dir: Output directory for output files
+       reports_dir: Output directory for report files
+       debug: Debug output
+       dry_run: Dry run (do not do any API calls)
+    """
+    args = dict2obj(locals())
+    main(args)
 
 if __name__ == "__main__":
     main()

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import random
 
 from aiohttp.client_exceptions import *
 from datetime import datetime, timedelta
@@ -22,335 +23,277 @@ from goosey.datadumper import DataDumper
 from goosey.utils import *
 from io import StringIO
 
-__author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.5"
-
 class M365DataDumper(DataDumper):
 
-    def __init__(self, output_dir, reports_dir, auth, app_auth, session, config, debug):
+    def __init__(self, output_dir, reports_dir, auth, app_auth, session, config, debug, o365_app_auth):
         super().__init__(f'{output_dir}{os.path.sep}m365', reports_dir, auth, app_auth, session, debug)
-        self.logger = setup_logger(__name__, debug)    
+        self.logger = setup_logger(__name__, debug)
         self.exo_us_government = config_get(config, 'config', 'exo_us_government', self.logger).lower()
         self.inboxfailfile = os.path.join(reports_dir, '_user_inbox_503.json')
         self.failurefile = os.path.join(reports_dir, '_no_results.json')
-        filters = config_get(config, 'filters', '', logger=self.logger)
+        self.ual_bounds_state = []
+        self.o365_app_auth = o365_app_auth
+        self.a_THRESHOLD = int(config_get(config, 'variables', 'ual_threshold'))
+        self.max_ual_tasks = max(1,int(config_get(config, 'variables', 'max_ual_tasks')))
+        self.ual_extra_start = config_get(config, 'variables', 'ual_extra_start')
+        self.ual_extra_end = config_get(config, 'variables', 'ual_extra_end')
+        self.tenantId = config_get(config, 'config', 'tenant')
+        self.ual_tasks = []
+        self.ual_results_cache = [] # used to store results in case of cross query interference
+        filters = config_get(config, 'filters', 'date_start', logger=self.logger)
         if filters != '' and  filters is not None:
             self.date_range=True
             self.date_start = config_get(config, 'filters', 'date_start')
             if config_get(config, 'filters', 'date_end') != '':
                 self.date_end = config_get(config, 'filters', 'date_end')
             else:
-                self.date_end = datetime.now().strftime("%Y-%m-%d") +':00:00.000Z'
+                self.date_end = datetime.now().strftime("%Y-%m-%d")
         else:
             self.date_range=False
 
         self.call_object = [self.get_url(), self.app_auth, self.logger, self.output_dir, self.get_session()]
 
-    async def dump_exo_groups(self) -> None:
-        """Dumps Exchange Online Role Group and Role Group Members information.
-
-        :return: None
-        :rtype: None
+    async def run_exo_cmdlet(self, cmdlet, Parameters={}, timeout=120):
         """
-
-        if '.AspNet.Cookies' not in self.auth:
-            self.logger.error("Missing .AspNet.Cookies auth cookie. Did you auth correctly? (Skipping dump_exo_groups)")
-            return
-        
-        self.logger.info("Gathering Exchange Online Role Groups...")
-        if self.exo_us_government == 'false':
-            url = 'https://admin.exchange.microsoft.com/beta/RoleGroup'
-        elif self.exo_us_government == 'true':
-            url = 'https://admin.exchange.office365.us/beta/RoleGroup'
-
+        Run an exo powershell cmdlet and return the results
+        """
+        access_token = self.o365_app_auth["access_token"]
         headers = {
-            'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
-            'validationkey': self.auth['validationkey'],
-            'Content-Type': 'application/json;charset=UTF-8'
+               'Prefer': 'odata.maxpagesize=1000',
+               'X-AnchorMailbox': "SystemMailbox{bb558c35-97f1-4cb9-8ff7-d53741dc928c}",
+               'Accept': 'application/json',
+               'Content-Type': 'application/json',
+               'Authorization': f"Bearer {access_token}",
+               'X-ResponseFormat': 'json',
+               'X-CmdletName': cmdlet,
+               'X-ClientApplication': 'ExoManagementModule'
         }
 
-        self.logger.info('Dumping Exchange Online Role Groups...')
-        async with self.ahsession.request("GET", url, headers=headers) as r:
-            result = await r.json()
+        raw_payload = {
+            'CmdletInput': {
+                'CmdletName': cmdlet,
+                'Parameters': Parameters
+            }
+        }
+        data=json.dumps(raw_payload)
+        result = None
+        err = None
+        # https://learn.microsoft.com/en-us/powershell/module/exchange
+        url = "https://outlook.office.com/adminapi/beta/{tenant_id}/InvokeCommand"
+        url = url.format(tenant_id=self.tenantId)
+        self.logger.debug(raw_payload)
 
-            if 'value' not in result:
-                if result['error']['message'] == 'Request validation failed with validation key':
-                    self.logger.error("Error with validation key: " + result['error']['message'])
-                    self.logger.error("Please re-auth.")
-                    sys.exit(1)    
+        try:
+            async with self.ahsession.request("POST", url=url, headers=headers, data=data, timeout=timeout) as r:
+                result = await r.text()
+                result = json.loads(result)
+                result["status"] = r.status
+                if r.status == 401:
+                    self.logger.error("Detected 401 unauthorized, exiting.")
+                    sys.exit(1)
+                elif r.status == 429:
+                    error = result['error']
+                    message = error['message']
+                    seconds = message.split(' ')[-2]
+                    self.logger.debug("Sleeping for %s seconds" % (seconds))
+                    await asyncio.sleep(int(seconds))
+                    err = message
                 else:
-                    self.logger.debug("Error with result: {}".format(str(result)))
-                return
+                    if "error" in result:
+                        err = result["error"]["message"]
+        except TimeoutError:
+            err = "TimeoutError"
+        except asyncio.exceptions.TimeoutError:
+            err = "TimeoutError"
+        except Exception as e:
+            self.logger.debug("Exception info", exc_info=1)
+            err = str(e)
 
-            outfile = os.path.join(self.output_dir, "EXO_RoleGroups.json")
-            with open(outfile, 'w', encoding="utf-8") as f:
-                if 'value' in result:
-                    f.write("\n".join([json.dumps(x) for x in result['value']]) + '\n')
-            self.logger.info('Finished dumping Exchange Online Role Groups.')
-        
-        self.logger.info("Gathering Exchange Online Role Group Members...")
+        if err:
+            self.logger.debug(err)
 
-        m365_rolegrps = []
-        for jsonline in open(outfile, 'r'):
-            m365_rolegrps.append(json.loads(jsonline))
+        return result, err
 
-        listOfIds = list(findkeys(m365_rolegrps, 'Id'))
-        listOfNames = list(findkeys(m365_rolegrps, 'Name'))
+    def load_exo_cmdlet(self, load_file):
+        """
+        Load previous output from an exo cmdlet.
+        Return an array of values
+        """
+        infile = os.path.join(self.output_dir, load_file)
+        if not os.path.isfile(infile):
+            self.logger.debug(f"File {infile} does not exist")
+            return []
+        values = []
+        infile_handle = open(infile, "r")
+        for line in infile_handle:
+            values.append(json.loads(line))
+        return values
 
-        headers = {
-            'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
-            'validationkey': self.auth['validationkey'],
-            'Content-Type': 'application/json;charset=UTF-8'
-        }
 
-        self.logger.info('Dumping Exchange Online Role Group Members...')
+    async def save_exo_cmdlet(self, cmdlet, save_file, Parameters={}, remove_fields=[], append=False, overwrite_existing=False):
+        """
+        Run an exo powershell cmdlet and save the results to a file
+        """
+        outfile = os.path.join(self.output_dir, save_file)
+        # Check if the output file exists and if we can overwrite it
+        if os.path.isfile(outfile) and not append and not overwrite_existing:
+            self.logger.debug(f"File {outfile} already exists. Not performing call to cmdlet")
+            return self.load_exo_cmdlet(save_file)
 
-        for i, j in zip(listOfIds, listOfNames):
-            if self.exo_us_government == 'false':
-                url = 'https://admin.exchange.microsoft.com/beta/RoleGroup(\'' + i + '\')/ExchangeAdminCenter.GetRoleGroupMembers()'
-            elif self.exo_us_government == 'true':
-                url = 'https://admin.exchange.office365.us/beta/RoleGroup(\'' + i + '\')/ExchangeAdminCenter.GetRoleGroupMembers()'
-            y = {"GroupId": i, "GroupName": j}
+        response, err = await self.run_exo_cmdlet(cmdlet, Parameters)
+        if err:
+            raise Exception(err)
+        response_dict = response
+        new_values = []
+        if "value" not in response_dict:
+            return
+        for value in response_dict["value"]:
+            for field in remove_fields:
+                del value[field]
+            new_values.append(value)
+        open_flags = "w"
+        if append:
+            open_flags = "a"
+        output_string = ""
+        for value in new_values:
+            output_string += json.dumps(value) + "\n"
+        if output_string != "":
+            with open(outfile, open_flags, encoding="utf-8") as f:
+                f.write(output_string)
 
-            async with self.ahsession.request("GET", url, headers=headers) as r:
-                result = await r.json()
-                finalvalue = result['value']
-                if 'value' not in result:
-                    if result['error']['message'] == 'Request validation failed with validation key':
-                        self.logger.error("Error with validation key: " + result['error']['message'])
-                        self.logger.error("Please re-auth.")
-                        sys.exit(1)    
-                    else:
-                        self.logger.debug("Error with result: {}".format(str(result)))
-                    return
+        return new_values
 
-                outfile = os.path.join(self.output_dir, "EXO_RoleGroupMembers.json")
-                with open(outfile, 'a', encoding="utf-8") as f:
-                    if finalvalue:
-                        finalvalue.append(y)
-                        f.write(json.dumps(finalvalue))
-                        f.write("\n")
-        
-        self.logger.info('Finished dumping Exchange Online Role Groups.') 
+    async def dump_exo_groups(self):
+        """
+        Dumps Exchange Online Role Group and Role Group Members information.
+        """
+        roles = await self.save_exo_cmdlet("Get-RoleGroup", "EXO_RoleGroups_PowerShell.json", Parameters={"ResultSize": "Unlimited"})
+
+        append=False
+        # Load save state and change the roles array to be only role groups that haven't been searched
+        member_save_state_file = os.path.join(self.output_dir, ".EXO_RoleGroupMembers_savestate")
+        last_role = load_state(member_save_state_file, is_datetime=False)
+        if last_role:
+            role_index = next((i for i, item in enumerate(roles) if item["Id"] == last_role), None)
+            roles = roles[role_index+1:]
+            append=True
+        for role in roles:
+            await self.save_exo_cmdlet("Get-RoleGroupMember", "EXO_RoleGroupsMembers_PowerShell.json", Parameters={"Identity": role["Id"]}, append=append)
+            save_state(member_save_state_file, role["Id"], is_datetime=False)
+            append=True
 
     async def dump_exo_mailbox(self) -> None:
-        """Dumps Exchange Online mailbox information.
-
-        :return: None
-        :rtype: None
         """
-
-        if '.AspNet.Cookies' not in self.auth:
-            self.logger.error("Missing .AspNet.Cookies auth cookie. Did you auth correctly? (Skipping dump_exo_mailbox)")
-            return
-
-        self.logger.info("Gathering Exchange Online Mailboxes...")
-        if self.exo_us_government == 'false':
-            url = 'https://admin.exchange.microsoft.com/beta/Recipient'
-        elif self.exo_us_government == 'true':
-            url = 'https://admin.exchange.office365.us/beta/Recipient'
-        headers = {
-            'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
-            'validationkey': self.auth['validationkey'],
-            'Content-Type': 'application/json;charset=UTF-8'
-        }
-
-        self.logger.info('Dumping Exchange Online Mailboxes...')
-        
-        async with self.ahsession.request("GET", url, headers=headers) as r:
-            result = await r.json()
-
-            if 'value' not in result:
-                if result['error']['message'] == 'Request validation failed with validation key':
-                    self.logger.error("Error with validation key: " + result['error']['message'])
-                    self.logger.error("Please re-auth.")
-                    sys.exit(1)    
-                else:
-                    self.logger.debug("Error with result: {}".format(str(result)))
-                return
-
-            outfile = os.path.join(self.output_dir, "EXO_Mailboxes.json")
-            with open(outfile, 'w', encoding='utf-8') as f:
-                nexturl = None
-                if '@odata.nextLink' in result:
-                    nexturl = result['@odata.nextLink']
-                if 'value' in result:
-                    f.write("\n".join([json.dumps(x) for x in result['value']]) + '\n')
-
-                retries = 5
-                while nexturl:
-                    try:
-                        skiptoken = nexturl.split('skiptoken=')[1]
-                        self.logger.debug('Getting nextLink %s' % (skiptoken))
-
-                        async with self.ahsession.get(nexturl, headers=headers, timeout=600) as r2:
-                            result2 = await r2.json()
-
-                            if 'value' not in result2:
-                                if result2['error']['message'] == 'Request validation failed with validation key':
-                                    self.logger.error("Error with validation key: " + result2['error']['message'])
-                                    self.logger.error("Please re-auth.")
-                                    sys.exit(1)    
-                                else:
-                                    self.logger.debug("Error with result: {}".format(str(result2)))
-                                return
-
-                            self.logger.debug('Received nextLink %s' % (skiptoken))
-                            f.write("\n".join([json.dumps(x) for x in result2['value']]) + '\n')
-                            f.flush()
-                            os.fsync(f)
-                            if '@odata.nextLink' in result2:
-                                nexturl = result2['@odata.nextLink']
-                                retries = 5
-                            else:
-                                nexturl = None
-                    except Exception as e:
-                        self.logger.error('Error on nextLink retrieval {}: {}'.format(skiptoken, str(e)))
-                        if retries == 0:
-                            self.logger.info('Error. No more retries on {}.'.format(skiptoken))
-                            nexturl = None 
-                        else:
-                            self.logger.info('Error. Retrying {} up to {} more times'.format(skiptoken, retries))
-                            retries -= 1
-                
-            self.logger.info('Finished dumping Exchange Online Mailboxes.')
-
-        self.logger.info("Gathering Exchange Online Mailbox CAS Settings...")
-
-        m365_mailboxes = []
-        for jsonline in open(outfile, 'r'):
-            m365_mailboxes.append(json.loads(jsonline))
-
-        listOfIds = list(findkeys(m365_mailboxes, 'ObjectId'))
-        listOfNames = list(findkeys(m365_mailboxes, 'PrimarySmtpAddress'))
-
-        headers = {
-            'Cookie': '.AspNet.Cookies=' + self.auth['.AspNet.Cookies'] + ';',
-            'validationkey': self.auth['validationkey'],
-            'Content-Type': 'application/json;charset=UTF-8'
-        }
-
-        self.logger.info('Dumping Exchange Online Mailbox CAS Settings...')
-
-        for i, j in zip(listOfIds, listOfNames):
-            if self.exo_us_government == 'false':
-                url = 'https://admin.exchange.microsoft.com/beta/Mailbox(' + i + ')?$select=ClientAccessSettings'
-            elif self.exo_us_government == 'true':
-                url = 'https://admin.exchange.office365.us/beta/Mailbox(' + i + ')?$select=ClientAccessSettings'
-            y = {"ObjectId": i, "PrimarySmtpAddress": j}
-
-            async with self.ahsession.request("GET", url, headers=headers) as r:
-                result = await r.json()
-                
-                if 'ClientAccessSettings' not in result:
-                    self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
-                    return
-                else:
-                    finalvalue = result['ClientAccessSettings']
-
-                outfile = os.path.join(self.output_dir, "EXO_MailboxCASSettings.json")
-                with open(outfile, 'a', encoding="utf-8") as f:
-                    if finalvalue:
-                        finalvalue.update(y)
-                        f.write(json.dumps(finalvalue))
-                        f.write("\n")
-        
-        self.logger.info('Finished dumping Exchange Online Mailbox CAS Settings.')
-        
-        self.logger.info('Dumping Exchange Online Mailbox Permissions and Delegations...')
-
-        for i, j in zip(listOfIds, listOfNames):
-            if self.exo_us_government == 'false':
-                url = 'https://admin.exchange.microsoft.com/beta/Mailbox(' + i + ')?$expand=FullAccessPermission,%20SendOnBehalfPermission,%20SendAsPermission'
-            elif self.exo_us_government == 'true':
-                url = 'https://admin.exchange.office365.us/beta/Mailbox(' + i + ')?$expand=FullAccessPermission,%20SendOnBehalfPermission,%20SendAsPermission'
-            y = {"PrimarySmtpAddress": j}
-
-            async with self.ahsession.request("GET", url, headers=headers) as r:
-                result = await r.json()
-
-                if not result:
-                    self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
-                    return
-
-                outfile = os.path.join(self.output_dir, "EXO_MailboxPermissions.json")
-                with open(outfile, 'a', encoding="utf-8") as f:
-                    if result:
-                        result.update(y)
-                        if '@odata.context' in result.keys():
-                            del result['@odata.context']
-                        f.write(json.dumps(result))
-                        f.write("\n")
-        
-        self.logger.info('Finished dumping Exchange Online Mailbox Permissions and Delegations.')
-
-        self.logger.info('Dumping Exchange Online Mailbox Forwarding...')
-
-        for i, j in zip(listOfIds, listOfNames):
-            if self.exo_us_government == 'false':
-                url = 'https://admin.exchange.microsoft.com/beta/Mailbox(' + i + ')?$select=ForwardingAddress,DeliverToMailboxAndForward'
-            elif self.exo_us_government == 'true':
-                url = 'https://admin.exchange.office365.us/beta/Mailbox(' + i + ')?$select=ForwardingAddress,DeliverToMailboxAndForward'
-            y = {"ObjectId": i, "PrimarySmtpAddress": j}
-
-            async with self.ahsession.request("GET", url, headers=headers) as r:
-                result = await r.json()
-
-                if not result:
-                    self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
-                    return
-
-                outfile = os.path.join(self.output_dir, "EXO_MailboxForwarding.json")
-                with open(outfile, 'a', encoding="utf-8") as f:
-                    if result:
-                        result.update(y)
-                        if '@odata.context' in result.keys():
-                            del result['@odata.context']
-                        f.write(json.dumps(result))
-                        f.write("\n")
-        
-        self.logger.info('Finished dumping Exchange Online Mailbox Forwarding.')
-
-    async def dump_exo_addins(self) -> None:
-        """Dumps Exchange Online Add-in data.
-
-        :return: None
-        :rtype: None
+        Dumps Exchange Online Mailbox Information
         """
+        self.logger.debug("Starting dumping EXO Mailboxes")
+        new_values = await self.save_exo_cmdlet("Get-Mailbox", "EXO_Mailboxes_PowerShell.json", Parameters={"IncludeInactiveMailbox": "True", "ResultSize": "Unlimited"})
+        mailboxes = []
+        for value in new_values:
+            mailboxes.append(value["WindowsEmailAddress"])
+        self.logger.debug("Finished dumping EXO Mailboxes")
 
-        if 'msExchEcpCanary' not in self.auth:
-            self.logger.error("Missing msExchEcpCanary auth cookie. Did you auth correctly? (Skipping dump_exo_addins)")
-            return
+        self.logger.debug("Starting dumping EXO Mailbox Client Access Settings")
+        await self.save_exo_cmdlet("Get-CASMailbox", "EXO_MailboxCAS_Settings_PowerShell.json", Parameters={"ResultSize": "Unlimited"})
+        await self.save_exo_cmdlet("Get-CASMailboxPlan", "EXO_Tenant_CAS_Plan_PowerShell.json", Parameters={"ResultSize": "Unlimited"})
+        self.logger.debug("Finished dumping EXO Mailboxes Client Access Settings")
 
-        self.logger.info("Gathering Exchange Online Add-ins...")
+        append=False
+        # Load save state
+        mailbox_save_state_file = os.path.join(self.output_dir, ".EXO_Mailbox_savestate")
+        last_mailbox = load_state(mailbox_save_state_file, is_datetime=False)
+        if last_mailbox:
+            mailbox_index = mailboxes.index(last_mailbox)
+            mailboxes = mailboxes[mailbox_index+1:]
+            append=True
+        # Go through each mailbox and grap permissions, folder permissions, and inbox rules
+        self.logger.debug("Starting dumping EXO Mailbox Permissions")
+        for mailbox in mailboxes:
+            self.logger.debug(f"Dumping Mailbox Info for {mailbox}")
+            await self.save_exo_cmdlet("Get-MailboxPermission", "EXO_MailboxPermissions_PowerShell.json", Parameters={"Identity": mailbox}, append=append)
+            await self.save_exo_cmdlet("Get-MailboxFolderPermission", "EXO_TopLevelFolderPermissions_PowerShell.json", Parameters={"Identity": mailbox}, append=append)
+            await self.save_exo_cmdlet("Get-InboxRule", "EXO_InboxRules_PowerShell.json", Parameters={"Mailbox": mailbox, "IncludeHidden": "True"}, append=append)
+            save_state(mailbox_save_state_file, mailbox, is_datetime=False)
+            append=True
 
-        if self.exo_us_government == 'false':
-            url = 'https://outlook.office365.com/ecp/DDI/DDIService.svc/GetList?schema=OrgClientExtension&msExchEcpCanary=' + self.auth['msExchEcpCanary']
-        elif self.exo_us_government == 'true':
-            url = 'https://outlook.office365.us/ecp/DDI/DDIService.svc/GetList?schema=OrgClientExtension&msExchEcpCanary=' + self.auth['msExchEcpCanary']
+        self.logger.debug("Finished dumping EXO Mailbox Permissions")
 
-        headers = {
-            'Cookie': 'msExchEcpCanary=' + self.auth['msExchEcpCanary'] + '; OpenIdConnect.token.v1=' + self.auth['OpenIdConnect.token.v1'] + ';',
-            'Content-Type': 'application/json;charset=UTF-8'
-        }
+    async def dump_exo_config_info(self) -> None:
+        """
+        Get EXO config information
+        """
+        asyncio.gather(
+            self.save_exo_cmdlet("Get-MailboxAuditBypassAssociation", "EXO_MailboxAuditStatus_PowerShell.json", Parameters={"ResultSize": "Unlimited"}),
+            self.save_exo_cmdlet("Get-AdminAuditLogConfig", "EXO_AdminAuditLogConfig_PowerShell.json"),
+            # Below cmdlet is in the previous powershell script but gives an error here
+            #self.save_exo_cmdlet("Get-UnifiedAuditLogRetentionPolicy", "EXO_UALRetentionPolicy_PowerShell.json"),
+            self.save_exo_cmdlet("Get-OrganizationConfig", "EXO_OrganizationConfig_PowerShell.json"),
+            self.save_exo_cmdlet("Get-PerimeterConfig", "EXO_PerimeterConfig_PowerShell.json"),
+            self.save_exo_cmdlet("Get-TransportRule", "EXO_TransportRules_PowerShell.json"),
+            self.save_exo_cmdlet("Get-TransportConfig", "EXO_TransportConfig_PowerShell.json")
+        )
 
-        payload = {"filter":{"Parameters":{"__type":"JsonDictionaryOfanyType:#Microsoft.Exchange.Management.ControlPanel"}},"sort":{"Direction":0,"PropertyName":"DisplayName"}}
+    async def dump_exo_mobile_devices(self) -> None:
+        """
+        Get information on m365 mobile devices
+        """
+        devices = await self.save_exo_cmdlet("Get-MobileDevice", "EXO_MobileDevices_PowerShell.json", Parameters={"ResultSize": "Unlimited"})
+        await self.save_exo_cmdlet("Get-MobileDeviceMailboxPolicy", "EXO_MobileDeviceMailboxPolicy_PowerShell.json")
 
-        payload = json.dumps(payload)
+        append=False
+        # Load save state and change the devices array to be only devices that haven't been searched
+        mobile_save_state_file = os.path.join(self.output_dir, ".EXO_MobileDevicesStats_savestate")
+        last_device = load_state(mobile_save_state_file, is_datetime=False)
+        if last_device:
+            device_index = next((i for i, item in enumerate(devices) if item["Guid"] == last_device), None)
+            devices = devices[device_index+1:]
+            append=True
+        for device in devices:
+            device = device["Guid"]
+            await self.save_exo_cmdlet("Get-MobileDeviceStatistics", "EXO_MobileDeviceStats_PowerShell.json", Parameters={"Identity": device, "ErrorAction": "SilentlyContinue"}, append=append)
+            save_state(mobile_save_state_file, device, is_datetime=False)
+            append=True
 
-        self.logger.info('Dumping Exchange Online Add-ins...')
-        async with self.ahsession.request("POST", url, headers=headers, data=payload) as r:
-            result = await r.json()
-            finalvalue = list(findkeys(result, 'Output'))
+    async def dump_ediscovery_info(self) -> None:
+        """
+        Get Exchange discovery information
+        """
+        roles = await self.save_exo_cmdlet("Get-ManagementRoleEntry", "EXO_EDiscovery_Roles_PowerShell.json", Parameters={"Identity": "*\\New-MailboxSearch"})
+        roles += await self.save_exo_cmdlet("Get-ManagementRoleEntry", "EXO_EDiscovery_Roles_PowerShell.json", Parameters={"Identity": "*\\Search-Mailbox"}, append=True)
+        new_roles = []
+        for role in roles:
+            new_role = role["Role"]
+            if new_role not in new_roles:
+                new_roles.append(role["Role"])
+        roles=new_roles
+        append=False
+        # Load save state and change the roles array to be only role groups that haven't been searched
+        role_save_state_file = os.path.join(self.output_dir, ".EXO_EDiscovery_savestate")
+        last_role = load_state(role_save_state_file, is_datetime=False)
+        if last_role:
+            self.logger.debug(f"save state role detected. Starting from {last_role}")
+            role_index = roles.index(last_role)
+            roles = roles[role_index+1:]
+            append=True
+        # Go through each role and pull cmdlets and assignments associated witht the roles
+        for role in roles:
+            await self.save_exo_cmdlet("Get-ManagementRoleEntry", "EXO_Ediscovery_RoleCmdlets_PowerShell.json", Parameters={"Identity": f"{role}\\*"}, append=append)
+            await self.save_exo_cmdlet("Get-ManagementRoleAssignment", "EXO_Ediscovery_RoleAssignments_PowerShell.json", Parameters={"Role": role, "Delegating": "False"}, append=append)
+            save_state(role_save_state_file, role, is_datetime=False)
+            append=True
 
-            outfile = os.path.join(self.output_dir, "EXO_AddIns.json")
-            with open(outfile, 'w', encoding="utf-8") as f:
-                    f.write(json.dumps(finalvalue))
-                    f.write("\n")
-            self.logger.info('Finished dumping Exchange Online Add-ins.')
-    
+
+
+    async def dump_exo_addins(self, timeout=120) -> None:
+        """
+        Get all of the applications installed for the organization
+        """
+        await self.save_exo_cmdlet("Get-App", "EXO_AddIns.json", Parameters={"OrganizationApp": "True", "PrivateCatalog": "True"}, remove_fields=["ManifestXml"])
+
     async def dump_exo_inboxrules(self) -> None:
-
+        """
+        Get all the messageRule objects defined for all users' inboxes
+        """
         if 'token_type' not in self.app_auth or 'access_token' not in self.app_auth:
             self.logger.error("Missing token_type and access_token from auth. Did you auth correctly? (Skipping dump_exo_inboxrules)")
             return
@@ -369,13 +312,13 @@ class M365DataDumper(DataDumper):
         if os.path.isfile(statefile):
             self.logger.debug(f'Save state file exists at {statefile}')
             self.logger.info(f'Inbox rules save state file found. Continuing from last checkpoint.')
-            
+
             with open(statefile, "r") as f:
                 save_state_type = f.readline().strip()
                 if save_state_type:
                     save_state_start = save_state_type
                     self.logger.info("Save state: {}".format(str(save_state_start)))
-            
+
             i = save_state_start
             self.logger.info("Value of I: {}".format(str(i)))
         else:
@@ -439,197 +382,473 @@ class M365DataDumper(DataDumper):
         elif self.exo_us_government == "true":
             return "https://graph.microsoft.us/beta/"
 
-    async def _ual_timeframe(self, start_date: str, end_date: str, start_time='', end_time='') -> None:
-        """Given a start and end date, dumps the unified audit log to a file.
-
-        :param start_date: Start date of UAL retrieval in strftime format %Y-%m-%d
-        :type start_date: str
-        :param end_date: End date of UAL retrieval in strftime format %Y-%m-%d
-        :type end_date: str
-        :return: None
-        :rtype: None
+    def _insert_ual_record(self, record, boundsfile=None):
         """
-        self.logger.info("Dumping UAL from date %sT%s to %sT%s" % (start_date, start_time, end_date, end_time))
-        postfix = f'{start_date}_{end_date}'
-        q_s = start_time.replace(':', '_').replace('.', '_')
-        q_e = end_time.replace(':', '_').replace('.', '_')
-        postfix += f'_{q_s}_{q_e}' if start_time else ''
+        Description:
+            Add a record to the sorted ual_bounds_state.
 
-        ual_filename = 'ual_%s.csv' % (postfix)
-        json_filename = 'ual_%s.json' % (postfix)
-        end_ret = ''
-        try:
-            headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Origin': 'https://security.microsoft.com',
-                'Connection': 'keep-alive',
-                'Cookie': 's.SessID='+ self.auth['sessionId'] + '; sccauth=' + self.auth['sccauth'] + ';',
-                'Upgrade-Insecure-Requests': '1',
-                'TE': 'Trailers',
-            }
-            if self.exo_us_government == 'true':
-                headers["Origin"] = 'https://security.microsoft.us'
-                url = "https://security.microsoft.us/api/UnifiedAuditLog/Export"
-            elif self.exo_us_government == 'false':
-                url = "https://security.microsoft.com/api/UnifiedAuditLog/Export"
-            
-            if start_time:
-                end_ret = end_date + 'T' + urllib.parse.quote(end_time)
-                payload='XSRF-TOKEN=' + self.auth['xsrf'] + '&startDate=%22'+ start_date + 'T' + urllib.parse.quote(start_time) + '%22&endDate=%22' + end_ret + '%22'
-            else:
-                end_ret = end_date + 'T04%3A00%3A00.000Z'
-                payload='XSRF-TOKEN=' + self.auth['xsrf'] + '&startDate=%22'+ start_date + 'T04%3A00%3A00.000Z%22&endDate=%22' + end_ret + '%22'
+        Arguments:
+            record: Tuple of (start, end, count, done_status)
+            boundsfile: filepath to where to save the bounds data.
 
-            seconds = time.perf_counter()
+        Returns:
+            None
+        """
+        # Unless the time period that logs are being pulled from changes
+        # the bounds within a time range will become further segmented and pulling from
+        # that time period will go faster. Saving the state of the bounds is difficult though
+        # because we have to be careful to account for changing start and end times.
 
-            done = False
-            while not done:
-                try:
-                    async with self.get_session().request("POST", url, headers=headers, data=payload, timeout=600) as response:
-                        if response.status == 440:
-                            self.logger.info('Received response code 440. Your auth has expired! Please re-auth and rerun.')
-                            sys.exit(1)
-                        data = await response.text()
-                        data_lines = data.splitlines()
-                        n_lines = len(data_lines)
-                        if n_lines == 1 or n_lines == 0:
-                            self.logger.info('UAL pull came back with no data. Not writing to file.')
+        # This could be an optional situation of the bounds with only one time frame being searched
+        # where $ is the begining and ! is the end and - in the middle means it's done_status is true.
+        # Notice that the bounds double as time goes on.
+        # This is because the shrinking of bounds is done in a binary fashion
+        # | $-!$ !$    !$             ! |
+        # Here it is after the finished time bounds are removed. Which is done for efficiency
+        # |    $ !$    !$             ! |
 
-                        else:
-                            self.logger.info("Writing {} bytes to {}".format(len(data), ual_filename))
-                            if n_lines == 50001:
-                                end_ret = data_lines[1].split(',')[0]
-                                self.logger.info(f"There are exactly 50001 lines in returned data. Last date retrieved is: {end_ret}")
-                        
-                            csvf = StringIO(data)
-                            csvReader = csv.DictReader(csvf)
-                            outfile = os.path.join(self.output_dir, json_filename)
-                            with open(outfile, 'w', encoding='utf-8') as jsonf:
-                                for rows in csvReader:
-                                    if rows['AuditData']:
-                                        Audit_data = json.loads(rows['AuditData'])
-                                        jsonf.write('{}\n'.format(json.dumps(Audit_data)))
-                        self.logger.debug('UAL dump (%s%s to %s%s) response code: %d' % (start_date, start_time, end_date, end_time, response.status))
-                        done = True
-                except asyncio.TimeoutError:
-                    self.logger.debug('UAL pull timed out. Retrying again.')
-                    done = False
-        except ClientPayloadError as e:
-            self.logger.error("Dumping UAL encountered an error with time bounds: {}".format(str(e)))
-            self.logger.error("Please change the date of the time bounds or save state to a date within the last 364 days.")
-            exit(1)
-        except KeyError as e:
-            self.logger.error("Dumping UAL encountered auth key error: {}".format(str(e)))
-            self.logger.error("Do you have the proper auth tokens?")
-        except requests.exceptions.ChunkedEncodingError as e:
-            self.logger.error("Dumping UAL encountered error: {}".format(str(e)))
-            self.logger.error("This is most likely due to a permissions error with your account accessing UAL.")
-        return end_ret
+        # Here is an example with multiple time frames
+        # | $  !  $ !$ !$    !
 
-    async def dump_ual(self, hourly=False) -> None:
-        """Dumps UAL for last year in chunks sequentially due to DOS protection on endpoint.
+        # Perform insert
+        #self.logger.debug(f"Inserting Record {record}")
 
-        :return: None
-        :rtype: None
+        if len(self.ual_bounds_state) == 0:
+            self.ual_bounds_state.append(record)
+            if boundsfile!= None:
+                save_state(boundsfile, self.ual_bounds_state, is_datetime=False, time_bounds=True)
+            return
+
+        record_inserted = False
+        for idx, cur_record in enumerate(self.ual_bounds_state):
+            # Situations for an insert here are
+            # 1. where a record already exists with that start time and we just shrink the bounds
+            # 2. Or it's a completely separate time range
+            if record["start"] == cur_record["start"] and record["end"] <= cur_record["end"]:
+                #self.logger.debug(f"Current Record {cur_record}")
+                cur_record["start"] = record["end"]
+                # if the count is less than 0 then it is not accurate
+                # if the new record is within a bound then adjust the larger bound.
+                if cur_record["count"] >= 0 and record["count"] > 0:
+                    cur_record["count"] = max(0,cur_record["count"] - record["count"])
+
+                new_records = [record.copy(), cur_record.copy()]
+                if cur_record["count"] == 0 or cur_record["start"] == cur_record["end"]:
+                    new_records = [record.copy()]
+                    #self.logger.debug("Record overwritten")
+                #self.logger.debug(f"New Records {new_records}")
+                self.ual_bounds_state = self.ual_bounds_state[:idx] + new_records + self.ual_bounds_state[idx+1:]
+                #self.logger.debug(f"Record inserted at index {idx}")
+                record_inserted = True
+                break
+            # Record before existing bounds.
+            elif record["start"] < cur_record["start"] and record["end"] <= cur_record["start"]:
+                new_records = [record.copy(), cur_record.copy()]
+                self.ual_bounds_state = self.ual_bounds_state[:idx] + new_records + self.ual_bounds_state[idx+1:]
+                record_inserted = True
+                break
+
+        if not record_inserted:
+            # Loop in reverse to insert a record at the end of bound ranges
+            reversed_bounds = self.ual_bounds_state[::-1]
+            for idx, cur_record in enumerate(self.ual_bounds_state[::-1]):
+                # Record after existing bounds.
+                if record["end"] > cur_record["end"] and record["start"] >= cur_record["end"]:
+                    new_records = [record.copy(), cur_record.copy()]
+                    reversed_bounds = reversed_bounds[:idx] + new_records + reversed_bounds[idx+1:]
+                    self.ual_bounds_state = reversed_bounds[::-1]
+                    record_inserted = True
+                    break
+
+        # Remove bounds with a done_status == True
+        # They no longer matter and their status as being done is tracked in the state file
+        self.ual_bounds_state = [r for r in self.ual_bounds_state if not r.get('done_status')]
+
+        self.ual_bounds_state = sorted(self.ual_bounds_state, key=lambda x: x['start'])
+
+        overlap_detected = False
+        for idx in range(len(self.ual_bounds_state)-1):
+            bound1 = self.ual_bounds_state[idx]
+            bound2 = self.ual_bounds_state[idx+1]
+            if bound1["end"] > bound2["start"]:
+                self.logger.error(f"Overlap detected in bounds state. Terminating, {bound1}, {bound2}")
+                sys.exit(1)
+
+        if boundsfile != None:
+            save_state(boundsfile, self.ual_bounds_state, is_datetime=False, time_bounds=True)
+
+    def find_bounds_end_size(self, start, end):
+        """
+        Description:
+            find the bounds within a timeframe and return a good end time given the bounds. Also estimates the total number of logs
+
+        Arguments:
+            start: starting timestamp
+            end: ending timestamp
+
+        Returns:
+            A good end time to search
+        """
+        # Use these to estimate how many logs are within this timeframe
+        bound_logs = 0
+        total_estimated_logs = 0
+        total_time_delta = end - start
+        record_time_delta = timedelta(0)
+
+        matching_bounds = []
+        for record in self.ual_bounds_state:
+            if start <= record["start"] and end >= record["end"]:
+                matching_bounds.append(record.copy())
+                bound_logs += record["count"]
+                record_time_delta += (record["end"] - record["start"])
+
+        if record_time_delta != timedelta(0):
+            total_estimated_logs = int(total_time_delta / record_time_delta * bound_logs)
+
+        if len(matching_bounds) == 0:
+            matching_bounds = [{"start": start, "end": end}]
+
+        if start < matching_bounds[0]["start"]:
+            return matching_bounds[0]["start"], total_estimated_logs
+
+
+
+        return matching_bounds[0]["end"], total_estimated_logs
+
+    def get_start_end_results(self, results):
+        start = dateutil.parser.parse(json.loads(results[0]["AuditData"])["CreationTime"]).replace(tzinfo=None)
+        end = start
+        for idx, entry in enumerate(results):
+            time = dateutil.parser.parse(json.loads(entry["AuditData"])["CreationTime"]).replace(tzinfo=None)
+            start = min(time, start)
+            end = max(time, end)
+
+        return start, end
+
+    async def _new_ual_timeframe(self, start, end, retries=5, statefile=None, boundsfile=None, session_results=[], sessionId=None, isolated=False):
+        """
+        Description:
+            Query the ual API to get information about the number of logs
+
+        Arguments:
+            start: starting timestamp
+            end: ending timestamp
+            retries=MAX_RETRIES: number of times to retry
+            statefile=None: filepath of statefile
+            isolated=False: Boolean for if the timeframe this function/task is dealing with has been isolated to a known good time bound.
+
+        Returns:
+        """
+
+        response_count = 0
+        session_sizes = {}
+        sessionCount = 0
+        finalEnd = end
+        tries = 0
+        total_duplicates = 0
+        continuing = False
+        # continue the session if this is a created a task
+        if isolated and sessionId and session_results:
+            continuing = True
+
+        #self.logger.debug(f"start/end before bounds {start}/{end}")
+        end, totalResultCount = self.find_bounds_end_size(start, end)
+        #self.logger.debug(f"start/end after bounds {start}/{end}")
+
+        while start < finalEnd and tries < retries:
+            # Can't have a time period with no time in between
+            startDate = start.strftime("%Y-%m-%dT%H:%M:%S")
+            endDate = end.strftime("%Y-%m-%dT%H:%M:%S")
+            if startDate == endDate:
+                end += timedelta(seconds=1)
+                endDate = end.strftime("%Y-%m-%dT%H:%M:%S")
+            # continue the session if this is a created task
+            if not continuing:
+                session_results = []
+                sessionId = str(random.randint(1337, 9999999))
+            continuing = False
+            sessionCount = -1
+            session_set = set() # Unique results returned. Used to detect duplicates
+            bound = f'[{startDate} - {endDate}]'
+            #self.logger.debug(f'===> Trying to find a bounding for {bound}')
+            # Inner loop for a session search. Denoted by the sessionId
+            status_code = None
+            session_timeout = 60
+            data_saved = False
+            new_task_created = False
+
+            while True:
+                startDate = start.strftime("%Y-%m-%dT%H:%M:%S")
+                endDate = end.strftime("%Y-%m-%dT%H:%M:%S")
+                resultSize = 100
+                parameters = {
+                     'SessionCommand': "ReturnLargeSet",
+                     'ResultSize': str(resultSize),
+                     'SessionId': sessionId,
+                     'StartDate': startDate,
+                     'EndDate': endDate
+                }
+                # more efficient to use lower ResultSize to find a session.
+                # Afterwards use the maximum ResultSize and higher timeout
+                if isolated:
+                    resultSize = 5000
+                    parameters["ResultSize"] = str(resultSize)
+                    session_timeout = 300
+
+                first_iteration = False
+                response, err = await self.run_exo_cmdlet("Search-UnifiedAuditLog", parameters, timeout=session_timeout)
+
+                if err != None and "TimeoutError" in err:
+                    # Timeout usually indicates too many logs. Need to reduce bounds
+                    self.logger.debug(f"Encountered Timeout Error {err}")
+                    new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
+                    end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
+                    break
+                elif err != None:
+                    # For other errors increase the tries and half the time
+                    tries += 1
+                    self.logger.debug(f"Encountered {err}. tries == {tries}/{retries}")
+                    new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
+                    end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
+                    break
+
+
+                if response == None:
+                    tries += 1
+                    self.logger.debug(f"No Results and no errors. tries == {tries}/{retries}")
+                    break
+                status_code = response["status"]
+                if status_code == 200:
+                    # If there are no more results within a session then break
+                    # This could indicate that there an error or just that all results have been received
+                    response_dict = response
+                    if len(response_dict['value']) == 0:
+                        tries += 1
+                        self.logger.debug(f"No results in response? tries == {tries}/{retries}")
+                        break
+                    if int(response_dict['value'][0]['ResultCount']) == 0:
+                        tries += 1
+                        self.logger.debug(f"Too many logs. Couldn't calculate total count. Halving. tries == {tries}/{retries}")
+                        new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
+                        end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
+                        break
+                    tries = 0
+                    sessionCount = int(response_dict['value'][0]['ResultCount'])
+                    totalResultCount = max(sessionCount, totalResultCount)
+
+                    # The ual api will sometimes produce duplicate results.
+                    session_oldset = set([json.loads(result["AuditData"])["Id"] for result in session_results])
+                    session_newset = set([json.loads(result["AuditData"])["Id"] for result in response_dict['value']])
+                    session_set = session_oldset.union(session_newset)
+                    old_duplicates = abs(len(session_results) - len(session_oldset))
+                    new_duplicates = abs(sessionCount - len(session_newset))
+                    total_duplicates = abs(len(session_results) + sessionCount - len(session_set))
+                    duplicate_difference = abs(new_duplicates - old_duplicates)
+                    # Check if the session has restarted by seeing if the difference in
+                    # duplicates is the same as the total amount of new logs or old logs. In this
+                    # case we will discard the earlier results and continue with the session.
+                    if total_duplicates - old_duplicates == sessionCount \
+                       or total_duplicates - new_duplicates == len(session_results):
+                        session_results = []
+                        session_set = session_newset
+
+                    if len(session_set) != len(session_results) + sessionCount:
+                        self.logger.debug(f"Duplicates found. Found {len(session_set)} unique results. Expected {len(session_results)}.")
+
+
+                    # Check if ual cache is needed. Results need to be within time bounds
+                    # and the result size either needs to match the number of logs within that
+                    # time range or be equal to the number of logs expected to be pulled
+                    response_start, response_end = self.get_start_end_results(response_dict['value'])
+                    response_len = len(response_dict['value'])
+                    self.logger.debug(f"{response_len} records returned from response")
+                    concat_len = len(session_results) + response_len
+                    if (concat_len == sessionCount \
+                       or (response_len == resultSize and concat_len <= sessionCount)) \
+                       and (response_start >= start and response_end <= end):
+                        # return results are correct
+                        session_results += response_dict['value']
+                        # Special case where the session is ignored with existing results are excluded
+                        if (response_len == sessionCount):
+                            session_results = response_dict['value']
+                    else:
+                        self.logger.debug("Results returned are wrong. Adding to cache and checking for existing entries in cache")
+                        self.logger.debug(f"response start {response_start}, response end {response_end}")
+                        self.ual_results_cache.append({"start": response_start,
+                                               "end": response_end,
+                                               "results": response_dict['value']})
+                        entry_found = False
+                        for idx, cache_entry in enumerate(self.ual_results_cache):
+                            response_len = len(cache_entry["results"])
+                            concat_len = len(session_results) + response_len
+                            if (concat_len == sessionCount \
+                               or (response_len == resultSize and concat_len <= sessionCount)) \
+                               and cache_entry["start"] >= start and cache_entry["end"] <= end:
+                                self.logger.debug("Cache entry found")
+                                session_results += cache_entry['results']
+                                self.ual_results_cache.pop(idx)
+                                break
+                        if not entry_found:
+                            self.logger.debug("No Cache entry found. Attempting again")
+                            break
+
+                    self._insert_ual_record({"start": start,
+                                       "end": end,
+                                       "count": sessionCount,
+                                       "done_status": False}, boundsfile=boundsfile)
+
+                    # check if within log threshold and the time difference is greater than 2 seconds
+                    if sessionCount > self.a_THRESHOLD and end - start >= timedelta(seconds=2):
+                        self.logger.debug(f"{sessionCount} results found within bounds. Exceeds result limit {self.a_THRESHOLD}")
+                        # half the difference between the start and end time
+                        new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
+                        end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
+
+                        break
+
+
+                    self.logger.debug(f"{len(session_results)}/{sessionCount} records found in session {sessionId}")
+                    self.logger.debug(f"Total results {response_count+len(session_results)}/{totalResultCount}")
+                    if len(session_results) >= sessionCount:
+                        # break out of session loop if all logs collected
+                        break
+                    elif not isolated:
+                        # This is where we will isolate this timeframe as a coroutine task just for this timeframe and then start another task to pull the rest
+                        # Can't continue until some of the tasks are done
+                        while len(self.ual_tasks) >= self.max_ual_tasks:
+                            self.logger.debug("Waiting for ual dumpers to complete before starting more")
+                            finished, ual_tasks_l = await asyncio.wait(self.ual_tasks, return_when=asyncio.FIRST_COMPLETED)
+                            self.ual_tasks = list(ual_tasks_l)
+                        self.ual_tasks.append(asyncio.create_task(self._new_ual_timeframe(start, end, statefile=statefile, isolated=True, session_results=session_results, sessionId=sessionId, boundsfile=boundsfile), name=f"ual_dumper_{start.isoformat()}_{end.isoformat()}"))
+                        new_task_created = True
+                        response_count += sessionCount
+                        break
+                elif status_code == 500:
+                    self.logger.debug(f'\t[-] Services aren\'t available right now, sleeping for 30 seconds before retrying...')
+                    self.logger.debug(str(response))
+                    asyncio.sleep(30)
+                    tries += 1
+                    break
+                else:
+                    try:
+                        self.logger.debug(json.dumps(response, indent=2, sort_keys=True))
+                    except:
+                        self.logger.debug(response)
+                    tries += 1
+                    break
+
+            # Check to see if the search was successful and the total results captured matches the ResultCount
+            # from the session
+            if status_code == 200 and len(session_results) == sessionCount:
+                # Remove the duplicates
+                new_session_results = []
+                response_count += len(session_results)
+#                if len(session_set) != len(session_results):
+#                    total_duplicates += len(session_results) - len(session_results)
+#                    for result in session_results:
+#                        result_id = json.loads(result["AuditData"])["Id"]
+#                        if result_id in session_set:
+#                            session_set.remove(result_id)
+#                            new_session_results.append(result)
+#                    session_results = new_session_results
+                # save output for current session
+                if len(session_results) > 0:
+                    session_filename = f"ual_{startDate}_{endDate}.json".replace(":", "_")
+                    session_filepath = os.path.join(self.output_dir, session_filename)
+                    ual_session_output_str = ""
+                    for ual_log in session_results:
+                        audit_data_dict = json.loads(ual_log["AuditData"])
+                        ual_session_output_str += json.dumps(audit_data_dict) + "\n"
+                    open(session_filepath, "w").write(ual_session_output_str)
+
+                # Save the latest date pulled to help with restart
+                save_state(statefile, end, start=start, is_datetime=False, time_range=True)
+                self._insert_ual_record({"start": start,
+                                   "end": end,
+                                   "count": sessionCount,
+                                   "done_status": True}, boundsfile=boundsfile)
+                data_saved = True
+
+                self.total_ual_logs_saved += len(session_results)
+                elapsed_time = time.perf_counter() - self.ual_seconds
+                rate = int(self.total_ual_logs_saved / elapsed_time * 60 * 60)
+                self.logger.info(f"Saved {len(session_results)} logs. Current rate is {rate} logs/hours")
+
+            if new_task_created or data_saved:
+                start = end
+                end = finalEnd
+                #self.logger.debug(f"start/end before bounds {start}/{end}")
+                end,_ = self.find_bounds_end_size(start, end)
+                #self.logger.debug(f"start/end after bounds {start}/{end}")
+
+        if not isolated:
+            await asyncio.gather(*self.ual_tasks)
+
+    async def dump_ual(self):
+        """Dumps UAL for last year using Search-UnifiedAuditLog api. Previous ual api is currently deprecated.
+
+        https://learn.microsoft.com/en-us/powershell/module/exchange/search-unifiedauditlog?view=exchange-ps
+
         """
         statefile = f'{self.output_dir}{os.path.sep}.ual_state'
         boundsfile = f'{self.output_dir}{os.path.sep}.ual_bounds'
-        if os.path.isfile(boundsfile):
-            self.logger.debug(f'UAL Bounds file exists at {boundsfile}')
-            last_ind = 0
-            if os.path.isfile(statefile):
-                self.logger.debug(f'UAL save state file exists at {statefile}')
-                last_state = open(statefile, 'r').read()
-                try:
-                    last_ind = int(last_state)
-                except Exception as e:
-                    self.logger.debug(f'Last state for statefile not a valid bound index, starting at 0: {last_state}')
-                    last_ind = 0
-            buf = open(boundsfile, 'r').readlines()
-            all_times = [x.strip().split(',')[:2] for x in buf]
 
-            for i in range(last_ind, len(all_times)):
-                t = all_times[i]
-                s = t[0].split(' ')
-                e = t[1].split(' ')
-                with open(statefile, 'w') as f:
-                    f.write(f'{i}')
-                self.logger.debug(f'Bounded UAL timeframes: {s} -> {e}')
-                await self._ual_timeframe(s[0], e[0], f'{s[1]}.000Z', f'{e[1]}.000Z')
+        # default end time
+        end = get_end_time_yesterday()
 
-        elif os.path.isfile(statefile):
-            self.logger.debug(f'UAL save state file exists at {statefile}')
-            self.logger.info(f'UAL Dump save state file found. Continuing from last checkpoint.')
-            last_state = open(statefile, 'r').read()
-            if 'T' in last_state:
-                self.logger.debug(f'Last state was an hourly pull: {last_state}')
-                start = datetime.strptime(last_state, '%Y-%m-%dT%H:%M:%S.000Z')
-                now = datetime.now()
-                all_hours = [(start.strftime('%Y-%m-%d'), start.strftime('%H:%M:%S.000Z'), start.strftime('%H:59:59.999Z'))]
-                self.logger.debug(f"Continuing UAL pull from {last_state}")
-                while start < now:
-                    start += timedelta(hours=1)
-                    all_hours.append((start.strftime('%Y-%m-%d'), start.strftime('%H:%M:%S.000Z'), start.strftime('%H:59:59.999Z')))
+        # Default start time
+        start = end - timedelta(days=364)
 
-                for h in all_hours:
-                    with open(statefile, 'w') as f:
-                        f.write(f'{h[0]}T{h[1]}')
-                    await self._ual_timeframe(h[0], h[0], h[1], h[2])
-            else:
-                self.logger.debug(f'Last state was a daily pull: {last_state}')
-                now = datetime.now()
-                with open(statefile, "r") as f:
-                    start_date = f.readline().strip()                                
-                dates = build_date_tuples(start_date=start_date, end_date=now)
-                for i in range(0, len(dates)-1):
-                    with open(statefile, 'w') as f:
-                        f.write(dates[i])
-                    await self._ual_timeframe(dates[i], dates[i+1]) 
-
-        elif self.date_range:
+        if self.date_range:
             self.logger.debug(f'UAL Dump using specified date range: {self.date_start} to {self.date_end}')
-           
-            dates = build_date_range(self.date_start, self.date_end)
-            for i in range(0, len(dates)-1):
-                with open(statefile, 'w') as f:
-                    f.write(dates[i])
-                await self._ual_timeframe(dates[i], dates[i+1]) 
-            
-            return
-        else:
-            self.logger.debug(f'Save state file does not exist at {statefile}.')
+            start = datetime.strptime(self.date_start,"%Y-%m-%d")
+            end = datetime.strptime(self.date_end,"%Y-%m-%d")
 
-            if hourly:
-                dates = build_date_tuples(chunk_size=1)
-            else:
-                dates = build_date_tuples()
+        bounds_save_state = load_state(boundsfile, is_datetime=False, time_bounds=True)
+        if bounds_save_state != None:
+            self.ual_bounds_state = bounds_save_state
 
+        finished_time_ranges = load_state(statefile, is_datetime=False, time_range=True)
 
-            if not hourly:
-                for i in range(0, len(dates)-1):
-                    with open(statefile, 'w') as f:
-                        f.write(dates[i])
-                    await self._ual_timeframe(dates[i], dates[i+1]) 
-            else:
-                for d in dates:
-                    for j in range(24):
-                        h = str(j).zfill(2)
-                        start_time = h + ':00:00.000Z'
-                        end_time = h + ':59:59.999Z'
-                        with open(statefile, 'w') as f:
-                            f.write(f'{d}T{start_time}')
-                        await self._ual_timeframe(d, d, start_time, end_time)
+        search_time_ranges = []
 
-    async def dump_powershell_calls(self) -> None:
+        # Check if the extra times were set
+        if self.ual_extra_start:
+            extra_start = datetime.strptime(self.ual_extra_start,"%Y-%m-%d")
+            extra_end = get_end_time_yesterday()
+            if self.ual_extra_end:
+                extra_end = datetime.strptime(self.ual_extra_end,"%Y-%m-%d")
 
-        self.logger.info('Starting PowerShell script...')
-        main_directory = os.getcwd()
-        file_directory = os.path.join(os.path.dirname(self.output_dir), '..', 'scripts')
-        file_path = os.path.join(file_directory, "EXO.ps1")
-        config_directory = os.path.join(os.path.dirname(self.output_dir), '..', '.conf')
-        report_directory = main_directory + os.path.sep + self.reports_dir
+            # Check if overlap in the extra time frame
+            if start <= extra_start and extra_start <= end or \
+               extra_start <= start and start <= extra_end:
+                # overlap at the beginning
+                if extra_start <= start:
+                    swap = extra_end
+                    extra_end = start
+                    end = max(swap, end)
+                # overlap at the end
+                if start <= extra_start:
+                    swap = end
+                    end = extra_start
+                    extra_end = max(swap, extra_end)
+            search_time_ranges += find_time_gaps(finished_time_ranges, extra_start, extra_end)
 
-        if sys.platform == 'win32':
-            subprocess.Popen(["powershell.exe", "-ExecutionPolicy", "Unrestricted", "-File", file_path, "-ExportDir", self.output_dir, "-ReportDir", report_directory], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        search_time_ranges += find_time_gaps(finished_time_ranges, start, end)
+
+        self.logger.debug(search_time_ranges)
+        # set the start time according to the save state
+        tasks = []
+        for record in search_time_ranges:
+            start, end = record["start"], record["end"]
+            start = start.replace(microsecond=0)
+            end = end.replace(microsecond=0)
+            self.logger.info(f"Goosey collecting ual logs from : {start} -> {end}")
+            tasks.append(asyncio.create_task(self._new_ual_timeframe(start, end, statefile=statefile, boundsfile=boundsfile),name=f"ual_bounding_{start.isoformat()}_{end.isoformat()}"))
+
+        self.total_ual_logs_saved = 0
+        self.ual_seconds = time.perf_counter()
+        await asyncio.gather(*tasks)
+        elapsed = time.perf_counter() - self.ual_seconds
+        self.logger.info("Goosey executed in {0:0.2f} seconds.".format(elapsed))
+

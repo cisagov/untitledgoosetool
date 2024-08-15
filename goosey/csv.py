@@ -10,11 +10,7 @@ from ast import parse
 import warnings
 import csv
 
-from tkinter import E
 from goosey.utils import *
-
-__author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.5"
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -29,7 +25,7 @@ def getargs(csv_parser) -> None:
                                '--output_dir',
                                action='store',
                                help='The directory where the goose files are located',
-                               default='output/azuread/')
+                               default='output/entraid/')
     csv_parser.add_argument('-r',
                                '--result_dir',
                                action='store',
@@ -77,23 +73,34 @@ def parse_file(input_file_name, input_file_path, fields, result_dir):
                 writer.writerow(row)
     logger.debug("Finished creating %s GUID to Text csv.." % (input_file_name.split('.')[0]))
 
-def main(args=None, gui=False) -> None:
+def main(args=None) -> None:
     global logger
     parser = argparse.ArgumentParser(add_help=True, description='Goosey', formatter_class=argparse.RawDescriptionHelpFormatter)
     if args is None:
         args = parser.parse_args()
 
-    if gui:
-        logger = setup_logger(__name__, args.debug, formatter='gui')
-    else:
-        logger = setup_logger(__name__, args.debug)
+    logger = setup_logger(__name__, args.debug)
 
-    
+
     logger.info("Creating CSV files started...")
     check_output_dir(args.result_dir, logger)
     file_filter_dict = create_file_filter_dict()
     recurse_output_dir(args.output_dir, args.result_dir, file_filter_dict)
     logger.info("Finished created CSV files.")
+
+def goosey_csv(output_dir="output/entraid/",
+			  result_dir="output/csvs/",
+			  debug=False):
+    """
+    Create csv files mapping GUIDs to text
+
+    Args:
+        output_dir: The directory where the goose files are located
+        result_dir: Directory for storing the results
+        debug: Enable debug logging
+    """
+    args = dict2obj(locals())
+    main(args)
 
 
 if __name__ == "__main__":

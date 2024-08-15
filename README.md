@@ -22,7 +22,6 @@
   - [GUI](#gui)
   - [Auth](#auth)
   - [Csv](#csv)
-  - [Graze](#graze)
   - [Honk](#honk)
   - [Messagetrace](#messagetrace)
   - [Recommended Default Workflow](#recommended-default-workflow)
@@ -36,7 +35,7 @@
 
 ## About
 
-Untitled Goose Tool is a robust and flexible hunt and incident response tool that adds novel authentication and data gathering methods in order to run a full investigation against a customer’s Azure Active Directory (AzureAD), Azure, and M365 environments. Untitled Goose Tool gathers additional telemetry from Microsoft Defender for Endpoint (MDE) and Defender for Internet of Things (IoT) (D4IoT).
+Untitled Goose Tool is a robust and flexible hunt and incident response tool that adds novel authentication and data gathering methods in order to run a full investigation against a customer’s Microsoft Entra ID, Azure, and M365 environments. Untitled Goose Tool gathers additional telemetry from Microsoft Defender for Endpoint (MDE) and Defender for Internet of Things (IoT) (D4IoT).
 
 This tool was designed to assist incident response teams by exporting cloud artifacts after an incident for environments that aren't ingesting logs into a Security Information and Events Management (SIEM) or other long term solution for logs.
 
@@ -45,11 +44,7 @@ For more guidance on how to use Untitled Goose Tool, please see: [Untitled Goose
 ## Getting Started
 
 ### Prerequisites
-Python 3.7, 3.8, 3.9, or 3.10 (up to 3.10.11) is required to run Untitled Goose Tool with Python. 
-
-Firefox is required for authenticating with Untitled Goose Tool.
-
-Currently, the following MFA methods are accepted in Untitled Goose Tool: the push notification offered by the Microsoft Authenticator app, number matching MFA, and one-time password (OTP) from either the Microsoft Authenticator app or SMS.
+Python >= 3.9 is required to run Untitled Goose Tool with Python. Python 3.12 is highly recommended as it results in better logging.
 
 On a Windows machine, you will need to make sure to have the Microsoft Visual C++ redistributable package (14.x) installed prior to running the tool.
 
@@ -77,11 +72,11 @@ python -m venv .venv
 ```
 
 ### Requirements
-The following AzureAD/M365 permissions are required to run Untitled Goose Tool, and provide it read-only access to the tenant.
+The following EntraID/M365 permissions are required to run Untitled Goose Tool, and provide it read-only access to the tenant.
 
 Please note: The user account should be a cloud-only account (not sync'd to the on-premise environment), this will ensure that the login process stays the same across environments for the tool.
 
-A cloud-only user account with the following permissions:
+A cloud-only user account and associated EXO service principal with the following permissions:
 
 Exchange Online Admin Center
 ```
@@ -127,6 +122,9 @@ Microsoft Graph:
 - SecurityAlert.Read.All (Application)
 - SecurityEvents.Read.All (Application)
 - UserAuthenticationMethod.Read.All (Application)
+
+Office 365 Exchange Online
+- Exchange.ManageAsApp
 ```
 
 Azure Subscription IAM Roles
@@ -136,12 +134,27 @@ Azure Subscription IAM Roles
 - Storage Queue Data Reader
 ```
 
-When creating the service principal, make sure to save the client secret value (not the client secret ID).
-
 Make sure to enable "Allow public client flows" for the service principal.
+
+We have a [setup powershell script](scripts/Create_SP.ps1) to setup a service principal with the needed permissions. Additionally the association of the Azure Service Principal with m365 can only be done via powershell currently and is needed for some of the m365 log collection.
+
+Below is an example of running the script which will output the `goosey conf` command you need to run to build the config files with the proper information
+
+```powershell
+PS > Write-Host "Creating a new Goose Application and Users"
+PS > ./Create_SP.ps1 -AppName GooseApp -Create
+```
+
+Additionally the script can delete the Application when you are done using it
+```powershell
+PS > Write-Host "Creating a new Goose Application and Users"
+PS > ./Create_SP.ps1 -AppName GooseApp -Delete
+```
 
 ### Installing
 To install, clone the repository and then do a pip install:
+
+#### Regular Install
 
 ```sh
 git clone https://github.com/cisagov/untitledgoosetool.git
@@ -149,362 +162,301 @@ cd untitledgoosetool
 python3 -m pip install . 
 ```
 
-If installing on **Ubuntu 22.04** and later the following steps are required to ensure a successful install:
+#### Docker
 
 ```sh
-git clone https://github.com/cisagov/untitledgoosetool.git
-cd untitledgoosetool
-# Download the correct wxPython wheel based on the correct Ubuntu version and Python version
-wget https://extras.wxpython.org/wxPython4/extras/linux/gtk3/ubuntu-22.04/wxPython-4.2.0-cp310-cp310-linux_x86_64.whl
-pip install wxPython-4.2.0-cp310-cp310-linux_x86_64.whl
-sudo apt install python3-tk
-python3 -m pip install .
+docker build . -t goosey
+docker run -it -v $PWD:/workdir goosey goosey honk --debug
 ```
+
 
 ## Usage
 ### Config
 
-Untitled Goose Tool requires authentication parameters and configuration. To automatically build the configuration file, run the following with the repository cloned:
+Untitled Goose Tool requires authentication parameters and configuration. To automatically build the configuration file, run the following after installation.
 
 ```sh
-$ python3 scripts/generate_conf.py
+$ goosey conf
 ```
 
-After this, `.auth`, `.conf`, `.auth_d4iot`, and `.d4iot_conf` files should be placed in your current directory. These files are used by Untitled Goose Tool. You should fill out the top section `[auth]` so that Untitled Goose Tool can properly auth to the appropriate resources. However, if you do not feel comfortable about entering your credentials into a file, you can opt to delete the `.auth` and/or `.auth_d4iot` and be prompted by the tool for credentials via console instead.
+A version of this command will be generated when the powershell installation script is run to create/setup the service principal. Below is an example with fake parameter values
+
+```sh
+$ goosey conf --config_tenant=5fd146ad-8b31-4afa-a72f-6f71df5c7173 --config_subscriptionid=all --auth_appid=24fd6377-79e0-445d-838b-3eaa60d3ca21 --auth_clientsecret=9gh8Q~U7Sd.TRNad5Qpd_GL_UM1slEPJTOLyGt-_ 
+```
+
+After this, `.auth`, `.conf`, `.auth_d4iot`, and `.d4iot_conf` files should be placed in your current directory. These files are used by Untitled Goose Tool. Unless this was generated with the above parameters, you should fill out the top section `[auth]` so that Untitled Goose Tool can properly auth to the appropriate resources. However, if you do not feel comfortable about entering your credentials into a file, you can opt to delete the `.auth` and/or `.auth_d4iot` and be prompted by the tool for credentials via console instead.
 
 The barebones auth looks like:
 
 ```
 [auth]
+# The username of your account. ex: AAD_upn@example.onmicrosoft.com
 username=
+# The password of your account. ex: AAD_password
 password=
+# The application ID of your service principal
 appid=
+# The client secret value of your service principal (not the secret ID)
 clientsecret=
-```
-
-Here is an auth file with descriptions of the fields:
-
-```
-[auth]
-username=The username of your account. ex: AAD_upn@example.onmicrosoft.com
-password=The password of your account. ex: AAD_password
-appid=The application ID of your service principal.
-clientsecret=The client secret value of your service principal (not the secret ID).
 ```
 
 The barebones config looks like:
 
 ```
 [config]
+# The tenant ID of your AAD tenant
 tenant=
-us_government=
-mde_gcc=
-mde_gcc_high=
-exo_us_government=
-subscriptionid=
-m365=
+# If you have a GCC High tenant
+us_government=False
+# If you have a GCC tenant with MDE
+mde_gcc=False
+# If you have a GCC High tenant with MDE
+mde_gcc_high=False
+# If your M365 tenant is a government tenant
+exo_us_government=False
+# If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces
+subscriptionid=All
 
 [filters]
+# Format should be YYYY-MM-DD. If not set will default to the earliest date for log retention
 date_start=
+# Format should be YYYY-MM-DD. Will default to the present day
 date_end=
 
-[azure]
-activity_log=False
-alerts=False
-all_azure_subscriptions=False
-all_resources=False
-assessments=False
-bastion_logs=False
-compliance=False
-container_config=False
-diagnostic_settings=False
-file_shares=False
-key_vault_log=False
-network=False
-nsg_flow_logs=False
-portal_alerts=False
-portal_defendersettings=False
-portal_pcap=False
-portal_sensors=False
-security_center=False
-storage_accounts=False
-vm_config=False
+[variables]
+# Threshold used for ual API requests. Specifies the maximum results pulled per session. Can be between 100 - 50000. The api is optimized to return results faster the larger the threshold, but the whole session has to be repeated if an error occurs as the results are not returned sorted. We recommend 5000 as the threshold, but this can be toggled with
+ual_threshold=5000
+# Maximum number of ual coroutines/tasks to have running asynchronously. Minimum value is 1.
+max_ual_tasks=5
+# Start date for an extra time frame for ual to search. Reason for this is because ual takes the longest to pull and while you don't want the oldest data to roll off, you may want to look at another timeframe and do not want to wait for ual to get there and pull the logs. Format should be YYY-MM-DD
+ual_extra_start=
+# End date for an extra time frame for ual to search. Reason for this is because ual takes the longest to pull and while you don't want the oldest data to roll off, you may want to look at another timeframe and do not want to wait for ual to get there and pull the logs. Format should be YYY-MM-DD
+ual_extra_end=
+# Threshold for how many logs to pull per query. Usually want to try to max this out as KQL queries are rate limited.
+mde_threshold=10000
+# can be either 'table' or 'machine'. 'table' will pull directly from the mde tables without filtering. While 'machine' will filter by 'machine' with large tenants 'machine' will likely be prefered as time bounding on the entire table will likely cause issues.
+mde_query_mode=table
 
-[azuread]
-applications=False
-azuread_audit=False
-azuread_provisioning=False
-conditional_access=False
-devices=False
-directory_roles=False
-groups=False
-identity_provider=False
-organization=False
-policies=False
+[azure]
+# Dumps activity log from azure
+activity_log=False
+# Returns all azure subscriptions
+all_azure_subscriptions=False
+# Dump insights bastion audit logs
+bastion_logs=False
+# Dump Azure configuration information
+configs=False
+# Dump D4IOT portal configs
+d4iot_portal_configs=False
+# Dump D4IOT portal pcaps from alerts
+d4iot_portal_pcap=False
+# Dump insights audit events for key_vault
+key_vault_log=False
+# Dump insights network security group flow events
+nsg_flow_logs=False
+
+[entraid]
+# Dumps Entra ID Audit logs
+entraid_audit=False
+# Dumps Entra ID provisioning logs
+entraid_provisioning=False
+# Dumps Entra ID configuration files
+configs=False
+# Dumps risk detections from identity protection. Requires a minimum of Microsoft Entra ID P1 license and Microsoft Entra Workload ID premium license for full results.
 risk_detections=False
+# Dumps risky users and service principal information. Requires a minimum of Microsoft Entra ID P2 license and Microsoft Entra Workload ID premium license for full results.
 risky_objects=False
+# Dump security actions, alerts, and scores
 security=False
-service_principals=False
+# Dump interactive (adfs) sign in logs
 signins_adfs=False
+# Dump managed identity (msi) sign in logs
 signins_msi=False
+# Dump non-interactive (rt) sign in logs
 signins_rt=False
+# Dump service principal (sp) signin logs
 signins_sp=False
-summaries=False
-users=False
 
 [m365]
+# Get Exchange discovery information
+ediscovery_info=False
+# Get all of the applications installed for the organization
 exo_addins=False
+# Get EXO config information
+exo_config_info=False
+# Dumps Exchange Online Role Group and Role Group Members information.
 exo_groups=False
+# Get all the messageRule objects defined for all users' inboxes
 exo_inboxrules=False
+# Dumps Exchange Online Mailbox Information
 exo_mailbox=False
-powershell_calls=False
+# Get information on m365 mobile devices
+exo_mobile_devices=False
+# Dumps UAL for last year using Search-UnifiedAuditLog api. Previous ual api is currently deprecated.
 ual=False
 
 [mde]
+# Dumps the results from incidents and alerts.
+advanced_hunting_alerts_incidents=False
+# Dumps the results from advanced hunting queries.
 advanced_hunting_query=False
+# Dumps the results from advanced hunting API queries.
 advanced_identity_hunting_query=False
+# Dump alerts
 alerts=False
+# Dump indicators
 indicators=False
+# Dump investigations
 investigations=False
+# Dump library files
 library_files=False
+# Dump known machine vulnerabilities
 machine_vulns=False
+# Dump machines with mde
 machines=False
+# Dump mde recommendations
 recommendations=False
+# Dump known installed software
 software=False
-
-[msgtrc]
-setemailaddress=
-direction=
-notifyaddress=
-originalclientip=
-recipientaddress=
-reporttitle=
-reporttype=
-senderaddress=
-```
-
-Here is a conf file with descriptions of the fields:
-
-```
-[config]
-tenant=The tenant ID of your AAD tenant.
-us_government=If you have a GCC High tenant, set this to True, otherwise set this to False.
-mde_gcc=If you have a GCC tenant with MDE, set this to True, otherwise set this to False.
-mde_gcc_high=If you have a GCC High tenant with MDE, set this to True, otherwise set this to False.
-exo_us_government=If your M365 tenant is a government tenant, set this to True, otherwise set this to False.
-subscriptionid=If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces.
-m365=If you have a M365 environment, set this to True, otherwise set this to False.
-
-[filters]
-date_start=Applies to Azure AD signin calls only. Maximum date range is 30 days ago. Format should be YYYY-MM-DD.
-date_end=Applies to Azure AD signin calls only. Maximum date range is today's date. Format should be YYYY-MM-DD.
-
-[azure]
-activity_log=False
-alerts=False
-all_azure_subscriptions=False
-all_resources=False
-assessments=False
-bastion_logs=False
-compliance=False
-container_config=False
-diagnostic_settings=False
-file_shares=False
-key_vault_log=False
-network=False
-nsg_flow_logs=False
-portal_alerts=False
-portal_defendersettings=False
-portal_pcap=False
-portal_sensors=False
-security_center=False
-storage_accounts=False
-vm_config=False
-
-[azuread]
-applications=False
-azuread_audit=False
-azuread_provisioning=False
-conditional_access=False
-devices=False
-directory_roles=False
-groups=False
-identity_provider=False
-organization=False
-policies=False
-risk_detections=False
-risky_objects=False
-security=False
-service_principals=False
-signins_adfs=False
-signins_msi=False
-signins_rt=False
-signins_sp=False
-summaries=False
-users=False
-
-[m365]
-exo_addins=False
-exo_groups=False
-exo_inboxrules=False
-exo_mailbox=False
-powershell_calls=False
-ual=False
-
-[mde]
-advanced_hunting_query=False
-advanced_identity_hunting_query=False
-alerts=False
-indicators=False
-investigations=False
-library_files=False
-machine_vulns=False
-machines=False
-recommendations=False
-software=False
-
-[msgtrc]
-setemailaddress=If you want to be notified by Microsoft when your message trace is ready, set this to True, otherwise set this to False.
-direction=Choices are All, Inbound, Outbound.
-notifyaddress=If you want to be notified by Microsoft when your message trace is ready for download, input an email here. If you have `setemailaddress=False`, you can leave this field blank.
-originalclientip=If you have a client IP address you want to check, input the IP address here.
-recipientaddress=Email address of the recipient that you want to run a message trace on.
-reporttitle=Set the report title here.
-reporttype=Choices are MessageTraceDetail or MessageTrace.
-senderaddress=Email address of the sender that you want to run a message trace on.
 ```
 
 The barebones D4IoT auth looks like:
 ```
 [auth]
+# Username for your D4IoT sensor login page
 username=
+# Password for your D4IoT sensor login page
 password=
-d4iot_sensor_token=
-d4iot_mgmt_token=
-```
-
-Here is an auth file with descriptions of the fields:
-```
-[auth]
-username=Username for your D4IoT sensor login page.
-password=Password for your D4IoT sensor login page.
-d4iot_sensor_token=Enter your D4IoT sensor API token.
-d4iot_mgmt_token=Enter your D4IoT management console API token.
+# Enter your D4IoT sensor API token
+sensor_token=
+# Enter your D4IoT management console API token
+mgmt_token=
 ```
 
 The D4IoT config looks like:
 ```
 [config]
+# Enter your D4IoT sensor IP
 d4iot_sensor_ip=
+# Enter your D4IoT management console IP
 d4iot_mgmt_ip=
 
 [d4iot]
+# Dump management alerts
 mgmt_alerts=False
+# Dump management devices
 mgmt_devices=False
+# Dump management sensor pcap captured
 mgmt_pcap=False
+# Dump management sensor information
 mgmt_sensor_info=False
+# Dump sensor alerts
 sensor_alerts=False
+# Collect all device connections
 sensor_device_connections=False
+# Dummp sensor device known cves
 sensor_device_cves=False
+# Dump sensor device known vulnerabilities
 sensor_device_vuln=False
+# Dump sensor devices
 sensor_devices=False
+# Dump sensor events
 sensor_events=False
+# Dump sensor operation vulnerabilities
 sensor_operational_vuln=False
+# Dump sensor pcap
 sensor_pcap=False
-sensor_security_vuln=False
-```
-
-Here is a D4IoT conf file with descriptions of the fields:
-```
-[config]
-d4iot_sensor_ip=Enter your D4IoT sensor IP.
-d4iot_mgmt_ip=Enter your D4IoT management console IP.
-
-[d4iot]
-mgmt_alerts=False
-mgmt_devices=False
-mgmt_pcap=False
-mgmt_sensor_info=False
-sensor_alerts=False
-sensor_device_connections=False
-sensor_device_cves=False
-sensor_device_vuln=False
-sensor_devices=False
-sensor_events=False
-sensor_operational_vuln=False
-sensor_pcap=False
+# Dump sensor security vulnerabilities
 sensor_security_vuln=False
 ```
 
 To enable specific pulls, you can change occurrences of `False` to `True` (case insensitive).
 
-### GUI
-There is a simplified GUI based off of [Gooey](https://github.com/chriskiehl/Gooey). Note that colorings may be a bit off when you run.
-
-Note: When you run `goosey-gui` and you use either app OTP or SMS OTP, you should make sure to keep an eye on the terminal that you used to launch `goosey-gui` with. It will prompt you for the OTP codes there and not in the GUI.
-
-To run with GUI:
-```sh
-$ goosey-gui
-```
-
-<p align="center">
-  <a href="" rel="noopener">
- <img src="assets/goosey_gui.png" alt="Goosey GUI"></a>
-</p>
-
 ### Auth
 
 ```sh
 $ goosey auth --help
-usage: goosey auth [-h] [-a AUTHFILE] [--d4iot-authfile D4IOT_AUTHFILE] [-c CONFIG] [-ac AUTH]
-                   [--d4iot-auth D4IOT_AUTH] [--d4iot-config D4IOT_CONFIG] [--revoke] [--interactive] [--debug]
-                   [--d4iot] [--secure]
+NAME
+    goosey auth - Untitled Goose Tool Authentication
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -a AUTHFILE, --authfile AUTHFILE
-                        File to store the authentication tokens and cookies (default: .ugt_auth)
-  --d4iot-authfile D4IOT_AUTHFILE
-                        File to store the authentication cookies for D4IoT (default: .d4iot_auth)
-  -c CONFIG, --config CONFIG
-                        Path to config file (default: .conf)
-  -ac AUTH, --auth AUTH
-                        File to store the credentials used for authentication (default: .auth)
-  --d4iot-auth D4IOT_AUTH
-                        File to store the D4IoT credentials used for authentication (default: .auth_d4iot)
-  --d4iot-config D4IOT_CONFIG
-                        Path to D4IoT config file (default: .d4iot_conf)
-  --revoke              Revoke sessions for user with authentication tokens and cookies (default: .ugt_auth)
-  --interactive         Interactive mode for Selenium. Default to false (headless).
-  --debug               Enable debug logging
-  --d4iot               Run the authentication portion for d4iot
-  --secure              Enable secure authentication handling (file encryption)
+SYNOPSIS
+    goosey auth <flags>
+
+DESCRIPTION
+    Untitled Goose Tool Authentication
+
+FLAGS
+    --authfile=AUTHFILE
+        Default: '.ugt_auth'
+        File to store the authentication tokens and cookies
+    --d4iot_authfile=D4IOT_AUTHFILE
+        Default: '.d4iot_auth'
+        File to store the authentication cookies for D4IoT
+    -c, --config=CONFIG
+        Default: '.conf'
+        Path to config file
+    --auth=AUTH
+        Default: '.auth'
+        File to store the credentials used for authentication
+    --d4iot_auth=D4IOT_AUTH
+        Default: '.auth_d4iot'
+        File to store the D4IoT credentials used for authentication
+    --d4iot_config=D4IOT_CONFIG
+        Default: '.d4iot_conf'
+    -r, --revoke=REVOKE
+        Default: False
+        Revoke sessions for user with authentication tokens and cookies
+    --interactive=INTERACTIVE
+        Default: False
+        Interactive mode for Selenium. Default to headless
+    --debug=DEBUG
+        Default: False
+        Enable debug logging
+    --d4iot=D4IOT
+        Default: False
+        Run the authentication portion for d4iot
+    --insecure=INSECURE
+        Default: False
+        Disable secure authentication handling (file encryption)
+    -u, --user_auth=USER_AUTH
+        Default: False
+        Authenticate with the user credentials and collect the session tokens
 ```
 
-Run with defaults:
+Run with defaults. By default it will encrypt the credentials/tokens with a prompted password. If the fields are not defined in the config then it will prompt for those as well:
 ```sh
 $ goosey auth
 ```
 
-Run with debug and secure authentication handling enabled:
+Run with debug and insecure authentication handling enabled:
 ```sh
-$ goosey auth --debug --secure
+$ goosey auth --debug --insecure
 ```
 
 ### Csv
 
 ```sh
 $ goosey csv --help
-usage: goosey csv [-h] [-o OUTPUT_DIR] [-r RESULT_DIR] [--debug]
+NAME
+    goosey csv - Create csv files mapping GUIDs to text
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -o OUTPUT_DIR, --output_dir OUTPUT_DIR
-                        The directory where the goose files are located
-  -r RESULT_DIR, --result_dir RESULT_DIR
-                        Directory for storing the results (default: output/csvs)
-  --debug               Debug output
+SYNOPSIS
+    goosey csv <flags>
+
+DESCRIPTION
+    Create csv files mapping GUIDs to text
+
+FLAGS
+    -o, --output_dir=OUTPUT_DIR
+        Default: 'output/entraid/'
+        The directory where the goose files are located
+    -r, --result_dir=RESULT_DIR
+        Default: 'output/csvs/'
+        Directory for storing the results
+    -d, --debug=DEBUG
+        Default: False
+        Enable debug logging
 ```
 
 Run with defaults:
@@ -512,55 +464,53 @@ Run with defaults:
 $ goosey csv
 ```
 
-### Graze
-
-```sh
-$ goosey graze --help
-usage: goosey graze [-h] [-a AUTHFILE] [-c CONFIG] [-o OUTPUT_DIR] [-d] [-e ENDPOINT]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -a AUTHFILE, --authfile AUTHFILE
-                        File to store the authentication tokens and cookies (default: .ugt_auth)
-  -c CONFIG, --config CONFIG
-                        Path to config file (default: .conf)
-  -o OUTPUT_DIR, --output-dir OUTPUT_DIR
-                        Output directory for honk outputs
-  -d, --debug           Enable debug logging
-  -e ENDPOINT, --endpoint ENDPOINT
-                        Endpoint for UAL. Can change to localhost for testing if hosting local server.
-```
-
-Run with defaults:
-```sh
-$ goosey graze
-```
-
 ### Honk
 
 ```sh
 $ goosey honk --help
-usage: goosey honk [-h] [-a AUTHFILE] [-c CONFIG] [-ac AUTH] [--output-dir OUTPUT_DIR] [--reports-dir REPORTS_DIR]
-                   [--debug] [--dry-run] [--azure] [--ad] [--m365] [--mde]
+NAME
+    goosey honk - Untitled Goose Tool Information Gathering
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -a AUTHFILE, --authfile AUTHFILE
-                        File to store the authentication tokens and cookies (default: .ugt_auth)
-  -c CONFIG, --config CONFIG
-                        Path to config file (default: .conf)
-  -ac AUTH, --auth AUTH
-                        File to store the credentials used for authentication (default: .auth)
-  --output-dir OUTPUT_DIR
-                        Directory for storing the results (default: output)
-  --reports-dir REPORTS_DIR
-                        Directory for storing debugging/informational logs (default: reports)
-  --debug               Enable debug logging
-  --dry-run             Dry run (do not do any API calls)
-  --azure               Set all of the Azure calls to true
-  --ad                  Set all of the Azure AD calls to true
-  --m365                Set all of the M365 calls to true
-  --mde                 Set all of the MDE calls to true
+SYNOPSIS
+    goosey honk <flags>
+
+DESCRIPTION
+    Untitled Goose Tool Information Gathering
+
+FLAGS
+    --authfile=AUTHFILE
+        Default: '.ugt_auth'
+        File to store the authentication tokens and cookies
+    -c, --config=CONFIG
+        Default: '.conf'
+        Path to config file
+    --auth=AUTH
+        Default: '.auth'
+        File to store the credentials used for authentication
+    -o, --output_dir=OUTPUT_DIR
+        Default: 'output'
+        Directory for storing the results
+    -r, --reports_dir=REPORTS_DIR
+        Default: 'reports'
+        Directory for storing debugging/informational logs
+    --debug=DEBUG
+        Default: False
+        Enable debug logging
+    --dry_run=DRY_RUN
+        Default: False
+        Dry run (do not do any API calls)
+    --azure=AZURE
+        Default: False
+        Set all of the Azure calls to true
+    --entraid=ENTRAID
+        Default: False
+        Set all of the Entra ID calls to true
+    --m365=M365
+        Default: False
+        Set all of the M365 calls to true
+    --mde=MDE
+        Default: False
+        Set all of the MDE calls to true
 ```
 
 Run with default options:
@@ -573,58 +523,90 @@ Run with debug logging enabled, output to directory `my_outputs`, and enable all
 $ goosey honk --debug --output-dir my_outputs --azure
 ```
 
-### Messagetrace
+### Autohonk
 
 ```sh
-$ goosey messagetrace --help
-usage: goosey messagetrace [-h] [--debug] [-c CONFIG] [-a AUTHFILE] [--output-dir OUTPUT_DIR] [--submit-report]
-                           [--gather-report] [--status-check] [--interactive]
+$ goosey autohonk --help
+NAME
+    goosey autohonk - Untitled Goose Tool Information Gathering. With auto authentication! This will never stop until you tell it to.
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --debug               Enable debug logging
-  -c CONFIG, --config CONFIG
-                        Path to config file (default: .conf)
-  -a AUTHFILE, --authfile AUTHFILE
-                        File to store the authentication tokens and cookies (default: .ugt_auth)
-  --output-dir OUTPUT_DIR
-                        Directory for storing the results (default: output)
-  --submit-report       Submits a message trace report
-  --gather-report       Gathers a message trace report
-  --status-check        Automates check status after submitting trace request
-  --interactive         Interactive mode for Selenium. Default to false (headless).
+SYNOPSIS
+    goosey autohonk <flags>
+
+DESCRIPTION
+    Untitled Goose Tool Information Gathering. With auto authentication! This will never stop until you tell it to.
+
+FLAGS
+    --authfile=AUTHFILE
+        Default: '.ugt_auth'
+        File to store the authentication tokens and cookies
+    -c, --config=CONFIG
+        Default: '.conf'
+        Path to config file
+    --auth=AUTH
+        Default: '.auth'
+        File to store the credentials used for authentication
+    -o, --output_dir=OUTPUT_DIR
+        Default: 'output'
+        Directory for storing the results
+    -r, --reports_dir=REPORTS_DIR
+        Default: 'reports'
+        Directory for storing debugging/informational logs
+    -d, --debug=DEBUG
+        Default: False
+        Enable debug logging
+    --azure=AZURE
+        Default: False
+        Set all of the Azure calls to true
+    --entraid=ENTRAID
+        Default: False
+        Set all of the Entra ID calls to true
+    --m365=M365
+        Default: False
+        Set all of the M365 calls to true
+    --mde=MDE
+        Default: False
+        Set all of the MDE calls to true
+    -i, --insecure=INSECURE
+        Default: False
+        Disable secure authentication handling (file encryption)
 ```
 
-Submitting a report for message trace:
-```sh
-$ goosey messagetrace --submit-report
-```
-
-Downloading a message trace report with interactive Selenium:
-```sh
-$ goosey messagetrace --gather-report --interactive
-```
 
 ### Recommended Default Workflow
 
-1. Fill out the .auth file with your credentials
-2. Fill out the configuration information and set wanted calls in the .conf file to `True`.
-2. Run `goosey auth` with desired parameters.
-3. Run `goosey honk` with desired parameters.
+1. Install the tool `pip install .`
+2. (Optional) Run the [setup powershell script](scripts/Create_SP.ps1) to setup the service principal for your tenant
+3. Use the outputed `goosey conf` command. Or just run it with no parameters
+4. Fill out the .auth file with your credentials (if you didn't use the output from the powershell script)
+5. Fill out the configuration information and set wanted calls in the .conf file to `True`.
+6. Run `goosey auth` with desired parameters.
+7. Run `goosey honk` with desired parameters.
+8. Instead of steps 6-7 run `goosey autohonk` with desired parameters
 
-### Recommended Workflow for UAL Call with Time Bounds
+### Recommended Workflow for UAL Call
 
-1. Fill out the .auth file with your credentials
-2. Run `goosey auth`.
-3. Run `goosey graze` and wait until it's finished running.
-4. Open the .conf file and set `ual` to `True`.
-4. Run `goosey honk`.
+1. Steps 1-4 above
+2. Open the .conf file and set `ual` under the `m365` section to `True`.
+3. Run `goosey auth` with desired parameters.
+4. Run `goosey honk` with desired parameters.
+5. Instead of steps 3-4 run `goosey autohonk` with desired parameters
 
 ### Considerations
 
-1. We recommend filling out the .conf file with your information as a first step.
+1. We recommend running the [setup powershell script](scripts/Create_SP.ps1) or filling out the .conf first
 2. Filling out the .auth and/or .auth_d4iot is now optional.
-3. Always run `goosey auth` before making any other `goosey` call besides `goosey csv`, which doesn't require authentication to run.
+3. Always run `goosey auth` before running `goosey honk` or `goosey d4iot`. `goosey autohonk` will perform authentication on it's own.
+
+### Special Use Cases
+
+#### Behind a proxy
+
+The tool should work behind a proxy. As long as the appropriate environment variables for the cli are set
+```
+https_proxy=<proxy_url>
+http_proxy=<proxy_url>
+```
 
 ### Known Issues
 
@@ -670,26 +652,7 @@ $ goosey messagetrace --gather-report --interactive
 
     **Solution:** These messages aren't issues. Azure compliance result call will still complete. The Azure information protection policy call is not a critical error. The Azure assessments call spams the console with one line warning: "Discriminator source is absent or null, use base class ResourceDetails" and will complete without an issue (besides the console spam). The Azure subassessments call spams the console with one line warning: "Subtype value GeneralVulnerability has no mapping, use base class AdditionalData." or "Subtype value SqlVirtualMachineVulnerability has no mapping, use base class AdditionalData." and will complete without an issue (besides the console spam).
 
-5. Users on MacOS and/or *nix systems might not be able to run the EXO.ps1 PowerShell script.
-
-    **Solution:** We recommend using Windows if you want to run the PowerShell script.
-
-6. Firefox geckodriver not in PATH
-
-    ```sh
-    auth - ERROR - Error getting Firefox webdriver: Message: 'geckodriver' executable needs to be in PATH.
-    ```
-
-    **Solution:** Run the following commands:
-
-    ```sh
-    #For Windows:
-    webdrivermanager firefox:v0.33.0 --linkpath AUTO
-    #For *nix recommend install outside of a virtual environment if you are working in one (you might need sudo):
-    webdrivermanager firefox:v0.33.0 --linkpath /usr/local/bin
-    ```
-
-7. Excessive amount of 429 errors during `goosey honk`
+5. Excessive amount of 429 errors during `goosey honk`
 
     **Solution:** Untitled Goose Tool will quickly encounter the Graph API limitations of a tenant; this is a limitation that Microsoft has on Graph API calls. 
 
@@ -698,6 +661,7 @@ $ goosey messagetrace --gather-report --interactive
 
 - Claire Casalnova
 - Jordan Eberst
+- Nicholas Kantor
 - Wellington Lee
 - Victoria Wallace
 

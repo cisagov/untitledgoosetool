@@ -3,7 +3,7 @@ output
 reports
 build
 dist
-geckodriver.log
+public
 goosey.egg-info
 __pycache__
 token_cache.bin
@@ -16,4 +16,4 @@ error.log
 *.aes
 *.auth*
 *_auth*
-*.conf*
+*.conf

@@ -11,9 +11,6 @@ import os
 from goosey.datadumper import DataDumper
 from goosey.utils import *
 
-__author__ = "Claire Casalnova, Jordan Eberst, Wellington Lee, Victoria Wallace"
-__version__ = "1.2.5"
-
 class DefenderIoTDumper(DataDumper):
     def __init__(self, output_dir, reports_dir, session, csrftoken, sessionid, config, auth_un_pw, debug):
         super().__init__(f'{output_dir}{os.path.sep}d4iot', reports_dir, csrftoken, sessionid, session, debug)
@@ -42,10 +39,10 @@ class DefenderIoTDumper(DataDumper):
             self.logger.error(f"Missing csrftoken and sessionid from auth. Did you auth correctly?")
             return
 
-        base_url = "https://" + str(self.sensor_ip) 
+        base_url = "https://" + str(self.sensor_ip)
         parent_url = base_url + parent
         parent_header = {'Authorization': '%s' % (self.sensor_token)}
-        
+
         self.logger.info('Dumping alert information...')
         parent_list = []
         async with self.ahsession.request('GET', parent_url, headers=parent_header, ssl=False) as r:
@@ -56,11 +53,11 @@ class DefenderIoTDumper(DataDumper):
 
             for entry in result:
                 parent_list.append(entry[identifier])
-        
+
         child_header = {"Cookie": "csrftoken=" + self.csrftoken + "; sessionid=" + self.sessionid}
         outpath = os.path.join(self.output_dir, 'sensor_alert_pcaps')
         check_output_dir(outpath, self.logger)
-        
+
         for id in parent_list:
             child_url = base_url + child + str(id)
             outfile = os.path.join(outpath, "alert_" + str(id) + ".pcap")
@@ -93,50 +90,78 @@ class DefenderIoTDumper(DataDumper):
             elif type(result) == dict:
                 with open(outfile, 'w+', encoding='utf-8') as f:
                     f.write(json.dumps(result) + "\n")
-                    
+
         self.logger.info("Finished dumping %s information." % (object))
 
     async def dump_sensor_devices(self) -> None:
+        """
+        Dump sensor devices
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/devices"
         object = 'devices'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_alerts(self) -> None:
+        """
+        Dump sensor alerts
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/alerts"
         object = 'alerts'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_device_connections(self) -> None:
+        """
+        Collect all device connections
+        https://learn.microsoft.com/en-us/azure/defender-for-iot/organizations/api/sensor-inventory-apis?tabs=connections-request%2Cconnections-device-request%2Ccves-request%2Ccves-ip-request%2Cdevices-request
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/devices/connections"
         object = 'device_connections'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_device_cves(self) -> None:
+        """
+        Dummp sensor device known cves
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/devices/cves"
         object = 'devices_cves'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_events(self) -> None:
+        """
+        Dump sensor events
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/events"
         object = 'events'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_device_vuln(self) -> None:
+        """
+        Dump sensor device known vulnerabilities
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/reports/vulnerabilities/devices"
         object = 'device_vulnerabilities'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_security_vuln(self) -> None:
+        """
+        Dump sensor security vulnerabilities
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/reports/vulnerabilities/security"
         object = "security_vulnerabilities"
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_operational_vuln(self) -> None:
+        """
+        Dump sensor operation vulnerabilities
+        """
         url = "https://" + str(self.sensor_ip) + "/api/v1/reports/vulnerabilities/operational"
         object = 'operational_vulnerabilities'
         await self.helper_single_object_sensor(url, object)
 
     async def dump_sensor_pcap(self) -> None:
+        """
+        Dump sensor pcap
+        """
         parent = "/api/v1/alerts"
         child = "/api/alert/filtered-pcap/"
         await self.helper_multiple_object_sensor(parent, child)
@@ -163,27 +188,39 @@ class DefenderIoTDumper(DataDumper):
                     f.write(json.dumps(entry) + "\n")
 
     async def dump_mgmt_devices(self) -> None:
+        """
+        Dump management devices
+        """
         url = "https://" + self.mgmt_ip + "/external/v1/devices"
         object = "mgmt_devices"
         await self.helper_single_object_mgmt(url,object)
 
     async def dump_mgmt_alerts(self) -> None:
+        """
+        Dump management alerts
+        """
         url = "https://" + self.mgmt_ip + "/external/v1/alerts"
         object = "mgmt_alerts"
         await self.helper_single_object_mgmt(url,object)
 
     async def dump_mgmt_sensor_info(self) -> None:
+        """
+        Dump management sensor information
+        """
         url = "https://" + self.mgmt_ip + "/external/v3/integration/sensors"
         object = "sensor_info"
         await self.helper_single_object_mgmt(url,object)
 
     async def dump_mgmt_pcap(self) -> None:
+        """
+        Dump management sensor pcap captured
+        """
         parent = "v1/alerts"
         child = 'v2/alerts/pcap'
         await self.helper_multiple_object_mgmt(parent,child)
-        
 
-    async def helper_multiple_object_mgmt(self, parent, child,identifier='id'): 
+
+    async def helper_multiple_object_mgmt(self, parent, child,identifier='id'):
         url_parent ="https://" + self.mgmt_ip + "/external/"
 
         if not self.mgmt_token:
@@ -200,10 +237,10 @@ class DefenderIoTDumper(DataDumper):
             if not result:
                 self.logger.debug("Error with result. Please check your auth: {}".format(str(result)))
                 return
-            
+
             for entry in result:
                 parent_list.append(entry[identifier])
-                   
+
         self.logger.info('Dumping %s %s information...' % (parent, child))
         for parent_id in parent_list:
             url2 = url_parent + child + "/" + str(parent_id)
@@ -215,7 +252,7 @@ class DefenderIoTDumper(DataDumper):
 
                 download_url = result['downloadUrl']
                 token = result['token']
-                
+
                 outfile = os.path.join(outpath, "alert_" + str(parent_id) + ".pcap")
                 pcap_token_header = {'Authorization': '%s' % (token)}
                 splits = download_url.split('/')
