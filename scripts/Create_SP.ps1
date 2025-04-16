@@ -106,7 +106,7 @@ Function Install-Single-Module {
 	# Import it if not currently installed
 	If ($null -eq (Get-InstalledModule $ModuleName -RequiredVersion $Version)) {
 		Write-Host "Importing $ModuleName"
-		Import-Module -Name $ModuleNAme -RequiredVersion $AzVersion -Force
+		Import-Module -Name $ModuleNAme -RequiredVersion $Version -Force
 	}
 }
 
