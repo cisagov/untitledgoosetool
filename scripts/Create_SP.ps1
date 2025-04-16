@@ -113,9 +113,9 @@ Function Install-Single-Module {
 # Install the required modules if not already installed
 Function Install-Modules {
 	Write-Host "Starting package installation. This part can take a few minutes"
-	$GraphVersion = 2.25.0
-	$AzVersion = 7.8.0
-	$ExchangeOnlineVersion = 3.7.0
+	$GraphVersion = "2.25.0"
+	$AzVersion = "7.8.0"
+	$ExchangeOnlineVersion = "3.7.0"
 	Install-Single-Module -ModuleName "Az.Resources" -Version $AzVersion
 	Install-Single-Module -ModuleName "Microsoft.Graph.Applications" -Version $GraphVersion
 	Install-Single-Module -ModuleName "ExchangeOnlineManagement" -Version $ExchangeOnlineVersion
