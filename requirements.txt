@@ -24,7 +24,7 @@ docstring-parser==0.16
 et-xmlfile==1.1.0
 fire==0.7.0
 frozenlist==1.4.1
-h11==0.14.0
+h11==0.16.0
 httplib2==0.22.0
 idna==3.10
 importlib-metadata==8.5.0
