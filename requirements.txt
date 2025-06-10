@@ -55,7 +55,7 @@ pyparsing==3.1.4
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
 pytz==2024.2
-requests==2.32.3
+requests==2.32.4
 requests-oauthlib==2.0.0
 SecretStorage==3.3.3
 six==1.16.0
