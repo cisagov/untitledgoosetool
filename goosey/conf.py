@@ -16,7 +16,9 @@ from goosey.m365_datadumper import M365DataDumper
 from goosey.azure_dumper import AzureDataDumper
 from goosey.mde_datadumper import MDEDataDumper
 
-def genconfstring(args, docstring_params, section_name, prefix, config_dict={}):
+def genconfstring(args, docstring_params, section_name, prefix, config_dict=None):
+    if config_dict is None:
+        config_dict = {}
     conf_s = f"[{section_name}]\n"
     for arg_key in args.keys():
         if arg_key.startswith(prefix):

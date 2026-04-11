@@ -55,10 +55,12 @@ class M365DataDumper(DataDumper):
 
         self.call_object = [self.endpoints["graph_api"] + "/beta/", self.app_auth, self.logger, self.output_dir, self.get_session()]
 
-    async def run_exo_cmdlet(self, cmdlet, Parameters={}, timeout=120):
+    async def run_exo_cmdlet(self, cmdlet, Parameters=None, timeout=120):
         """
         Run an exo powershell cmdlet and return the results
         """
+        if Parameters is None:
+            Parameters = {}
         access_token = self.o365_app_auth["access_token"]
         headers = {
                'Prefer': 'odata.maxpagesize=1000',
@@ -131,10 +133,14 @@ class M365DataDumper(DataDumper):
         return values
 
 
-    async def save_exo_cmdlet(self, cmdlet, save_file, Parameters={}, remove_fields=[], append=False, overwrite_existing=False):
+    async def save_exo_cmdlet(self, cmdlet, save_file, Parameters=None, remove_fields=None, append=False, overwrite_existing=False):
         """
         Run an exo powershell cmdlet and save the results to a file
         """
+        if Parameters is None:
+            Parameters = {}
+        if remove_fields is None:
+            remove_fields = []
         outfile = os.path.join(self.output_dir, save_file)
         # Check if the output file exists and if we can overwrite it
         if os.path.isfile(outfile) and not append and not overwrite_existing:
@@ -517,7 +523,7 @@ class M365DataDumper(DataDumper):
 
         return start, end
 
-    async def _new_ual_timeframe(self, start, end, retries=5, statefile=None, boundsfile=None, session_results=[], sessionId=None, isolated=False, caller=""):
+    async def _new_ual_timeframe(self, start, end, retries=5, statefile=None, boundsfile=None, session_results=None, sessionId=None, isolated=False, caller=""):
         """
         Description:
             Query the ual API to get information about the number of logs
@@ -531,6 +537,8 @@ class M365DataDumper(DataDumper):
 
         Returns:
         """
+        if session_results is None:
+            session_results = []
 
         response_count = 0
         session_sizes = {}
