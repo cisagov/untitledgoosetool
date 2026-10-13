@@ -16,7 +16,9 @@ from goosey.m365_datadumper import M365DataDumper
 from goosey.azure_dumper import AzureDataDumper
 from goosey.mde_datadumper import MDEDataDumper
 
-def genconfstring(args, docstring_params, section_name, prefix, config_dict={}):
+def genconfstring(args, docstring_params, section_name, prefix, config_dict=None):
+    if config_dict is None:
+        config_dict = {}
     conf_s = f"[{section_name}]\n"
     if section_name == 'variables':
         conf_s += "# The Operation, UserId, and ClientIP filters cannot be run together. You must start a separate UAL pull for each filter. You may need to clear the bounds and state files for duplicate timeframes.\n"
