@@ -39,6 +39,24 @@ class M365DataDumper(DataDumper):
         self.max_ual_tasks = max(1,int(config_get(config, 'variables', 'max_ual_tasks')))
         self.ual_extra_start = config_get(config, 'variables', 'ual_extra_start')
         self.ual_extra_end = config_get(config, 'variables', 'ual_extra_end')
+        # Optional: comma-separated list of UAL Operations to filter by (in [variables] as `ual_operations`)
+        self.ual_operations = config_get(config, 'variables', 'ual_operations')
+        if self.ual_operations:
+            self.ual_ops_list = [op.strip() for op in self.ual_operations.split(',') if op.strip()]
+        else:
+            self.ual_ops_list = []
+        # Optional: comma-separated list of user IDs to filter by (in [variables] as `ual_userids`)
+        self.ual_userids = config_get(config, 'variables', 'ual_userids')
+        if self.ual_userids:
+            self.ual_userid_list = [u.strip().strip('"').strip("'") for u in self.ual_userids.split(',') if u.strip()]
+        else:
+            self.ual_userid_list = []
+        # Optional: comma-separated list of client IP addresses to filter by (in [variables] as `ual_clientip`)
+        self.ual_clientip = config_get(config, 'variables', 'ual_clientip')
+        if self.ual_clientip:
+            self.ual_clientip_list = [ip.strip().strip('"').strip("'") for ip in self.ual_clientip.split(',') if ip.strip()]
+        else:
+            self.ual_clientip_list = []
         self.tenantId = config_get(config, 'config', 'tenant')
         self.ual_tasks = []
         self.ual_results_cache = [] # used to store results in case of cross query interference
@@ -87,21 +105,28 @@ class M365DataDumper(DataDumper):
         try:
             async with self.ahsession.request("POST", url=url, headers=headers, data=data, timeout=timeout) as r:
                 result = await r.text()
-                result = json.loads(result)
-                result["status"] = r.status
                 if r.status == 401:
-                    self.logger.error("Detected 401 unauthorized, exiting.")
+                    self.logger.error("Detected 401 unauthorized. Your O365 token has expired. Please re-authenticate.")
                     sys.exit(1)
-                elif r.status == 429:
+                if not result or not result.strip():
+                    err = f"Empty response received from API (status: {r.status})"
+                    return None, err
+                try:
+                    result = json.loads(result)
+                except json.JSONDecodeError as je:
+                    self.logger.debug(f"Invalid JSON response (status: {r.status}): {result[:500]}")
+                    err = f"Invalid JSON response (status: {r.status})"
+                    return None, err
+                result["status"] = r.status
+                if r.status == 429:
                     error = result['error']
                     message = error['message']
                     seconds = message.split(' ')[-2]
                     self.logger.debug("Sleeping for %s seconds" % (seconds))
                     await asyncio.sleep(int(seconds))
                     err = message
-                else:
-                    if "error" in result:
-                        err = result["error"]["message"]
+                elif "error" in result:
+                    err = result["error"]["message"]
         except TimeoutError:
             err = "TimeoutError"
         except asyncio.exceptions.TimeoutError:
@@ -130,6 +155,36 @@ class M365DataDumper(DataDumper):
             values.append(json.loads(line))
         return values
 
+    def _ual_record_matches(self, record):
+        """Return True if a UAL record matches configured operation/UPN/IP filters."""
+        try:
+            audit = json.loads(record.get("AuditData", "{}"))
+        except Exception:
+            return False
+
+        # Operations filter (if configured) - check the Operation field directly
+        if self.ual_ops_list:
+            operation = audit.get("Operation", "")
+            if operation not in self.ual_ops_list:
+                return False
+
+        # UPN filter (if configured) - check UserId field directly
+        if self.ual_userid_list:
+            user_id = audit.get("UserId", "")
+            if user_id not in self.ual_userid_list:
+                return False
+
+        # Client IP address filter (if configured) - check ClientIP field directly
+        if self.ual_clientip_list:
+            client_ip = audit.get("ClientIP", "")
+            if client_ip not in self.ual_clientip_list:
+                return False
+
+        return True
+
+    def _ual_filters_active(self):
+        """Return True if any UAL filter list is configured."""
+        return bool(self.ual_ops_list or self.ual_userid_list or self.ual_clientip_list)
 
     async def save_exo_cmdlet(self, cmdlet, save_file, Parameters={}, remove_fields=[], append=False, overwrite_existing=False):
         """
@@ -557,9 +612,14 @@ class M365DataDumper(DataDumper):
             # continue the session if this is a created task
             if not continuing:
                 session_results = []
+                raw_records_received = 0  # Track unfiltered records for API pagination
                 sessionId = str(random.randint(1337, 9999999))
+            else:
+                # When continuing, estimate raw records from existing filtered results
+                raw_records_received = len(session_results)
             continuing = False
             sessionCount = -1
+            session_complete = False
             session_set = set() # Unique results returned. Used to detect duplicates
             bound = f'[{startDate} - {endDate}]'
             #self.logger.debug(f'===> Trying to find a bounding for {bound}')
@@ -568,18 +628,26 @@ class M365DataDumper(DataDumper):
             session_timeout = 60
             data_saved = False
             new_task_created = False
+            result_count_reliable = True
 
             while True:
                 startDate = start.strftime("%Y-%m-%dT%H:%M:%S")
                 endDate = end.strftime("%Y-%m-%dT%H:%M:%S")
                 resultSize = 100
                 parameters = {
-                     'SessionCommand': "ReturnLargeSet",
-                     'ResultSize': str(resultSize),
-                     'SessionId': sessionId,
-                     'StartDate': startDate,
-                     'EndDate': endDate
+                    'SessionCommand': "ReturnLargeSet",
+                    'ResultSize': str(resultSize),
+                    'SessionId': sessionId,
+                    'StartDate': startDate,
+                    'EndDate': endDate
                 }
+                # Only include filters if provided
+                if self.ual_ops_list:
+                    parameters['Operations'] = self.ual_ops_list
+                if self.ual_userid_list:
+                    parameters['UserIds'] = self.ual_userid_list
+                if self.ual_clientip_list:
+                    parameters['IPAddresses'] = self.ual_clientip_list
                 # more efficient to use lower ResultSize to find a session.
                 # Afterwards use the maximum ResultSize and higher timeout
                 if isolated:
@@ -618,103 +686,136 @@ class M365DataDumper(DataDumper):
                         tries += 1
                         self.logger.debug(f"No results in response? tries == {tries}/{retries}")
                         break
-                    if int(response_dict['value'][0]['ResultCount']) == 0:
-                        tries += 1
-                        self.logger.debug(f"Too many logs. Couldn't calculate total count. Halving. tries == {tries}/{retries}")
-                        new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
-                        end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
-                        break
-                    tries = 0
-                    sessionCount = int(response_dict['value'][0]['ResultCount'])
-                    totalResultCount = max(sessionCount, totalResultCount)
-
-                    # The ual api will sometimes produce duplicate results.
-                    session_oldset = set([json.loads(result["AuditData"])["Id"] for result in session_results])
-                    session_newset = set([json.loads(result["AuditData"])["Id"] for result in response_dict['value']])
-                    session_set = session_oldset.union(session_newset)
-                    old_duplicates = abs(len(session_results) - len(session_oldset))
-                    new_duplicates = abs(sessionCount - len(session_newset))
-                    total_duplicates = abs(len(session_results) + sessionCount - len(session_set))
-                    duplicate_difference = abs(new_duplicates - old_duplicates)
-                    # Check if the session has restarted by seeing if the difference in
-                    # duplicates is the same as the total amount of new logs or old logs. In this
-                    # case we will discard the earlier results and continue with the session.
-                    if total_duplicates - old_duplicates == sessionCount \
-                       or total_duplicates - new_duplicates == len(session_results):
-                        session_results = []
-                        session_set = session_newset
-
-                    if len(session_set) != len(session_results) + sessionCount:
-                        self.logger.debug(f"Duplicates found. Found {len(session_set)} unique results. Expected {len(session_results)}.")
-
-
-                    # Check if ual cache is needed. Results need to be within time bounds
-                    # and the result size either needs to match the number of logs within that
-                    # time range or be equal to the number of logs expected to be pulled
-                    response_start, response_end = self.get_start_end_results(response_dict['value'])
+                    reported_count = int(response_dict['value'][0]['ResultCount'])
                     response_len = len(response_dict['value'])
-                    self.logger.debug(f"{response_len} records returned from response")
-                    concat_len = len(session_results) + response_len
-                    if (concat_len == sessionCount \
-                       or (response_len == resultSize and concat_len <= sessionCount)) \
-                       and (response_start >= start and response_end <= end):
-                        # return results are correct
-                        session_results += response_dict['value']
-                        # Special case where the session is ignored with existing results are excluded
-                        if (response_len == sessionCount):
-                            session_results = response_dict['value']
-                    else:
-                        self.logger.debug("Results returned are wrong. Adding to cache and checking for existing entries in cache")
-                        self.logger.debug(f"response start {response_start}, response end {response_end}")
-                        self.ual_results_cache.append({"start": response_start,
-                                               "end": response_end,
-                                               "results": response_dict['value']})
-                        entry_found = False
-                        for idx, cache_entry in enumerate(self.ual_results_cache):
-                            response_len = len(cache_entry["results"])
-                            concat_len = len(session_results) + response_len
-                            if (concat_len == sessionCount \
-                               or (response_len == resultSize and concat_len <= sessionCount)) \
-                               and cache_entry["start"] >= start and cache_entry["end"] <= end:
-                                self.logger.debug("Cache entry found")
-                                session_results += cache_entry['results']
-                                self.ual_results_cache.pop(idx)
-                                break
-                        if not entry_found:
-                            self.logger.debug("No Cache entry found. Attempting again")
-                            break
+                    tries = 0
 
+                    if reported_count > 0:
+                        result_count_reliable = True
+                        sessionCount = reported_count
+                        totalResultCount = max(sessionCount, totalResultCount)
+                        self.logger.info(f"[UAL] Using ResultCount from API: {sessionCount} (session {sessionId}, bound {bound})")
+                    else:
+                        # ResultCount is 0 but results exist — API not reporting count
+                        result_count_reliable = False
+                        self.logger.warning(f"[UAL] ResultCount unavailable (reported 0 with {response_len} results). Falling back to page-fill heuristic. (session {sessionId}, bound {bound})")
+
+                    if result_count_reliable:
+                        # The ual api will sometimes produce duplicate results.
+                        # Duplicate math is based on raw API counts (raw_records_received and sessionCount),
+                        # not the locally-filtered session_results, so it stays correct when UAL filters are active.
+                        session_oldset = set([json.loads(result["AuditData"])["Id"] for result in session_results])
+                        session_newset = set([json.loads(result["AuditData"])["Id"] for result in response_dict['value']])
+                        session_set = session_oldset.union(session_newset)
+                        old_duplicates = abs(raw_records_received - len(session_oldset))
+                        new_duplicates = abs(sessionCount - len(session_newset))
+                        total_duplicates = abs(raw_records_received + sessionCount - len(session_set))
+                        duplicate_difference = abs(new_duplicates - old_duplicates)
+                        if total_duplicates - old_duplicates == sessionCount \
+                           or total_duplicates - new_duplicates == raw_records_received:
+                            session_results = []
+                            raw_records_received = 0
+                            session_set = session_newset
+                        if len(session_set) != raw_records_received + sessionCount:
+                            self.logger.debug(f"Duplicates found. Found {len(session_set)} unique results. Expected {raw_records_received}.")
+
+                    response_start, response_end = self.get_start_end_results(response_dict['value'])
+                    self.logger.debug(f"{response_len} records returned from response")
+
+                    if result_count_reliable:
+                        # --- Existing validation logic (unchanged) ---
+                        # Pagination decisions use raw_records_received (pre-filter) so the
+                        # API-side total still matches even when local filters drop records.
+                        concat_len = raw_records_received + response_len
+                        if (concat_len == sessionCount \
+                           or (response_len == resultSize and concat_len <= sessionCount)) \
+                           and (response_start >= start and response_end <= end):
+                            filtered = [r for r in response_dict['value'] if self._ual_record_matches(r)]
+                            session_results += filtered
+                            raw_records_received += response_len
+                            # Special case where the session is reset with existing results excluded
+                            if (response_len == sessionCount):
+                                session_results = filtered
+                                raw_records_received = response_len
+                        else:
+                            self.logger.debug("Results returned are wrong. Adding to cache and checking for existing entries in cache")
+                            self.logger.debug(f"response start {response_start}, response end {response_end}")
+                            self.ual_results_cache.append({"start": response_start,
+                                                   "end": response_end,
+                                                   "results": response_dict['value']})
+                            entry_found = False
+                            for idx, cache_entry in enumerate(self.ual_results_cache):
+                                response_len = len(cache_entry["results"])
+                                concat_len = raw_records_received + response_len
+                                if (concat_len == sessionCount \
+                                   or (response_len == resultSize and concat_len <= sessionCount)) \
+                                   and cache_entry["start"] >= start and cache_entry["end"] <= end:
+                                    self.logger.debug("Cache entry found")
+                                    cached_filtered = [r for r in cache_entry['results'] if self._ual_record_matches(r)]
+                                    session_results += cached_filtered
+                                    raw_records_received += len(cache_entry['results'])
+                                    self.ual_results_cache.pop(idx)
+                                    break
+                            if not entry_found:
+                                self.logger.debug("No Cache entry found. Attempting again")
+                                break
+                    else:
+                        # Unreliable mode: accept results if within time bounds (filtered).
+                        # Track raw page sizes for partial-page detection.
+                        filtered = [r for r in response_dict['value'] if self._ual_record_matches(r)]
+                        if response_start >= start and response_end <= end:
+                            session_results += filtered
+                        else:
+                            self.logger.debug(f"Results outside time bounds (unreliable mode). start={response_start}, end={response_end}. Accepting anyway.")
+                            session_results += filtered
+                        raw_records_received += response_len
+
+                    # When the API reports a count, prefer that for the bounds record so
+                    # progress accounting reflects the real time-window density (independent
+                    # of local filtering). In page-fill mode use raw_records_received.
+                    record_count = sessionCount if result_count_reliable else raw_records_received
                     self._insert_ual_record({"start": start,
                                        "end": end,
-                                       "count": sessionCount,
+                                       "count": record_count,
                                        "done_status": False}, boundsfile=boundsfile)
 
-                    # check if within log threshold and the time difference is greater than 2 seconds
-                    if sessionCount > self.a_THRESHOLD and end - start >= timedelta(seconds=2):
-                        self.logger.debug(f"{sessionCount} results found within bounds. Exceeds result limit {self.a_THRESHOLD}")
-                        # half the difference between the start and end time
+                    effective_count = sessionCount if result_count_reliable else raw_records_received
+                    if effective_count > self.a_THRESHOLD and end - start >= timedelta(seconds=2):
+                        self.logger.debug(f"{effective_count} results found within bounds. Exceeds result limit {self.a_THRESHOLD}")
                         new_end_ts = start.timestamp() + ((end.timestamp() - start.timestamp())/2)
                         end = datetime.fromtimestamp(new_end_ts).replace(microsecond=0)
-
                         break
 
-
-                    self.logger.debug(f"{len(session_results)}/{sessionCount} records found in session {sessionId}")
-                    self.logger.debug(f"Total results {response_count+len(session_results)}/{totalResultCount}")
-                    if len(session_results) >= sessionCount:
-                        # break out of session loop if all logs collected
-                        break
-                    elif not isolated:
-                        # This is where we will isolate this timeframe as a coroutine task just for this timeframe and then start another task to pull the rest
-                        # Can't continue until some of the tasks are done
-                        while len(self.ual_tasks) >= self.max_ual_tasks:
-                            self.logger.debug("Waiting for ual dumpers to complete before starting more")
-                            finished, ual_tasks_l = await asyncio.wait(self.ual_tasks, return_when=asyncio.FIRST_COMPLETED)
-                            self.ual_tasks = list(ual_tasks_l)
-                        self.ual_tasks.append(asyncio.create_task(self._new_ual_timeframe(start, end, statefile=statefile, isolated=True, session_results=session_results, sessionId=sessionId, boundsfile=boundsfile), name=f"{caller}_dumper_{start.isoformat()}_{end.isoformat()}"))
-                        new_task_created = True
-                        response_count += sessionCount
-                        break
+                    if result_count_reliable:
+                        self.logger.debug(f"{len(session_results)} filtered / {raw_records_received} raw / {sessionCount} total in session {sessionId}")
+                        self.logger.debug(f"Total results {response_count+raw_records_received}/{totalResultCount}")
+                        if raw_records_received >= sessionCount:
+                            break
+                        elif not isolated:
+                            while len(self.ual_tasks) >= self.max_ual_tasks:
+                                self.logger.debug("Waiting for ual dumpers to complete before starting more")
+                                finished, ual_tasks_l = await asyncio.wait(self.ual_tasks, return_when=asyncio.FIRST_COMPLETED)
+                                self.ual_tasks = list(ual_tasks_l)
+                            self.ual_tasks.append(asyncio.create_task(self._new_ual_timeframe(start, end, statefile=statefile, isolated=True, session_results=session_results, sessionId=sessionId, boundsfile=boundsfile), name=f"{caller}_dumper_{start.isoformat()}_{end.isoformat()}"))
+                            new_task_created = True
+                            response_count += sessionCount
+                            break
+                    else:
+                        self.logger.debug(f"{len(session_results)} filtered / {raw_records_received} raw in session {sessionId} (page-fill mode)")
+                        if response_len < resultSize:
+                            # Partial page = session exhausted
+                            sessionCount = raw_records_received
+                            self.logger.debug(f"Partial page ({response_len} < {resultSize}). Session complete: {raw_records_received} raw ({len(session_results)} after filter).")
+                            break
+                        elif not isolated:
+                            while len(self.ual_tasks) >= self.max_ual_tasks:
+                                self.logger.debug("Waiting for ual dumpers to complete before starting more")
+                                finished, ual_tasks_l = await asyncio.wait(self.ual_tasks, return_when=asyncio.FIRST_COMPLETED)
+                                self.ual_tasks = list(ual_tasks_l)
+                            self.ual_tasks.append(asyncio.create_task(self._new_ual_timeframe(start, end, statefile=statefile, isolated=True, session_results=session_results, sessionId=sessionId, boundsfile=boundsfile), name=f"{caller}_dumper_{start.isoformat()}_{end.isoformat()}"))
+                            new_task_created = True
+                            response_count += raw_records_received
+                            break
                 elif status_code == 500:
                     self.logger.debug(f'\t[-] Services aren\'t available right now, sleeping for 30 seconds before retrying...')
                     self.logger.debug(str(response))
@@ -729,12 +830,16 @@ class M365DataDumper(DataDumper):
                     tries += 1
                     break
 
-            # Check to see if the search was successful and the total results captured matches the ResultCount
-            # from the session
-            if status_code == 200 and len(session_results) == sessionCount:
+            # Check to see if the search was successful and the session completed.
+            # In reliable mode we want raw_records_received >= sessionCount (the API
+            # returned everything it promised). In page-fill mode any non-zero
+            # raw count means we collected at least one page.
+            session_complete = (result_count_reliable and raw_records_received >= sessionCount) or \
+                               (not result_count_reliable and sessionCount > 0)
+            if status_code == 200 and session_complete:
                 # Remove the duplicates
                 new_session_results = []
-                response_count += len(session_results)
+                response_count += raw_records_received
 #                if len(session_set) != len(session_results):
 #                    total_duplicates += len(session_results) - len(session_results)
 #                    for result in session_results:
@@ -755,16 +860,20 @@ class M365DataDumper(DataDumper):
 
                 # Save the latest date pulled to help with restart
                 save_state(statefile, end, start=start, is_datetime=False, time_range=True)
+                record_count = sessionCount if result_count_reliable else raw_records_received
                 self._insert_ual_record({"start": start,
                                    "end": end,
-                                   "count": sessionCount,
+                                   "count": record_count,
                                    "done_status": True}, boundsfile=boundsfile)
                 data_saved = True
 
                 self.total_ual_logs_saved += len(session_results)
                 elapsed_time = time.perf_counter() - self.ual_seconds
                 rate = int(self.total_ual_logs_saved / elapsed_time * 60 * 60)
-                self.logger.info(f"Saved {len(session_results)} logs. Current rate is {rate} logs/hours")
+                if self._ual_filters_active():
+                    self.logger.info(f"Saved {len(session_results)} logs (filtered from {raw_records_received} raw). Current rate is {rate} logs/hours")
+                else:
+                    self.logger.info(f"Saved {len(session_results)} logs. Current rate is {rate} logs/hours")
 
             if new_task_created or data_saved:
                 start = end
@@ -844,4 +953,3 @@ class M365DataDumper(DataDumper):
         await asyncio.gather(*tasks)
         elapsed = time.perf_counter() - self.ual_seconds
         self.logger.info("Goosey executed in {0:0.2f} seconds.".format(elapsed))
-

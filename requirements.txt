@@ -18,13 +18,13 @@ certifi==2024.12.14
 cffi==1.17.1
 charset-normalizer==3.4.1
 colored==2.2.4
-cryptography==44.0.1
+cryptography==43.0.1
 darkdetect==0.8.0
 docstring-parser==0.16
 et-xmlfile==1.1.0
 fire==0.7.0
 frozenlist==1.4.1
-h11==0.16.0
+h11==0.14.0
 httplib2==0.22.0
 idna==3.10
 importlib-metadata==8.5.0

@@ -59,6 +59,7 @@ async def run(args, config, auth, init_sections, auth_un_pw=None):
     msft_security_center_auth = auth["app_auth"]["securitycenter_api"]
     loganalytics_app_auth = auth["app_auth"]["log_analytics_api"]
     msft_security_auth = auth["app_auth"]["security_api"]
+    cloudapp_defender_auth = auth["app_auth"]["cloudapp_defender"]
 
     maindumper = DataDumper(args.output_dir, args.reports_dir, msft_graph_app_auth, session, args.debug)
 
@@ -81,7 +82,7 @@ async def run(args, config, auth, init_sections, auth_un_pw=None):
             azure_dumper = AzureDataDumper(args.output_dir, args.reports_dir, maindumper.ahsession, mgmt_app_auth, config, auth_un_pw, loganalytics_app_auth, args.debug)
             azure = True
         if 'mde' in init_sections:
-            mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_security_center_auth, msft_security_auth, maindumper.ahsession, config, args.debug)
+            mdedumper = MDEDataDumper(args.output_dir, args.reports_dir, msft_security_center_auth, msft_security_auth, msft_graph_app_auth, cloudapp_defender_auth, maindumper.ahsession, config, args.debug)
             mde = True
 
     async with maindumper.ahsession as ahsession:
@@ -274,5 +275,3 @@ def autohonk(authfile=".ugt_auth",
         elapsed = time.perf_counter() - seconds
         if elapsed <= 5:
             break
-
-

@@ -1184,7 +1184,7 @@ class AzureDataDumper(DataDumper):
                 self.auxillary_list_all(network_manager.network_managers, sub_id, "list_by_subscription", caller=caller_name),
                 self.auxillary_list_all(network_manager.network_profiles, sub_id, "list_all", caller=caller_name),
                 self.auxillary_list_all(network_manager.network_security_groups, sub_id, "list_all", caller=caller_name),
-                self.auxillary_list_all(network_manager.network_security_perimeters, sub_id, "list_by_subscription", api_version="2023-07-01-preview", caller=caller_name),
+                #self.auxillary_list_all(network_manager.network_security_perimeters, sub_id, "list_by_subscription", api_version="2023-07-01-preview", caller=caller_name),
                 self.auxillary_list_all(network_manager.network_virtual_appliances, sub_id, "list", caller=caller_name),
                 self.auxillary_list_all(network_manager.network_watchers, sub_id, "list_all", caller=caller_name),
                 self.auxillary_list_all(network_manager.p2_svpn_gateways, sub_id, "list", caller=caller_name),
