@@ -1,0 +1,166 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://openvex.dev/docs/public/vex-aeb6aa47ad9ac12bbddad0197f2c823c0953a1a17e98ccb054d15f7c9f83bec1",
+  "author": "Unknown Author",
+  "timestamp": "2024-10-11T15:39:41.488777+02:00",
+  "last_updated": "2024-10-11T15:39:41.804444+02:00",
+  "version": 13,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2023-47627"
+      },
+      "timestamp": "2024-10-11T15:39:41.488778+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2023-49081"
+      },
+      "timestamp": "2024-10-11T15:39:41.529864+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2023-49082"
+      },
+      "timestamp": "2024-10-11T15:39:41.556502+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2023-49083"
+      },
+      "timestamp": "2024-10-11T15:39:41.581339+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/cryptography@41.0.3"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2023-50782"
+      },
+      "timestamp": "2024-10-11T15:39:41.606077+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/cryptography@41.0.3"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2023-5590"
+      },
+      "timestamp": "2024-10-11T15:39:41.629895+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/selenium@4.10.0"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-0727"
+      },
+      "timestamp": "2024-10-11T15:39:41.654429+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/cryptography@41.0.3"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-23334"
+      },
+      "timestamp": "2024-10-11T15:39:41.677768+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-23829"
+      },
+      "timestamp": "2024-10-11T15:39:41.70342+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-26130"
+      },
+      "timestamp": "2024-10-11T15:39:41.727467+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/cryptography@41.0.3"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-27306"
+      },
+      "timestamp": "2024-10-11T15:39:41.753031+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-30251"
+      },
+      "timestamp": "2024-10-11T15:39:41.777633+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2024-42367"
+      },
+      "timestamp": "2024-10-11T15:39:41.804445+02:00",
+      "products": [
+        {
+          "@id": "pkg:pypi/aiohttp@3.8.5"
+        }
+      ],
+      "status": "under_investigation"
+    }
+  ]
+}
