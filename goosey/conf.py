@@ -18,6 +18,8 @@ from goosey.mde_datadumper import MDEDataDumper
 
 def genconfstring(args, docstring_params, section_name, prefix, config_dict={}):
     conf_s = f"[{section_name}]\n"
+    if section_name == 'variables':
+        conf_s += "# The Operation, UserId, and ClientIP filters cannot be run together. You must start a separate UAL pull for each filter. You may need to clear the bounds and state files for duplicate timeframes.\n"
     for arg_key in args.keys():
         if arg_key.startswith(prefix):
             var_name = arg_key[len(prefix):]
@@ -33,26 +35,22 @@ def genconfstring(args, docstring_params, section_name, prefix, config_dict={}):
     conf_s += "\n"
     return conf_s
 
-"""
-TODO: Add support for these options in the future
-        prompt_needed: Option to prompt for needed fields during generation
-        prompt_all: Option to prompt for all fields
-        collection_level: Level of log collection. 0 will pull nothing. 1 will pull the important stuff. 2 will pull everything
-"""
-
 def genconf(outpath_auth=".auth",
             outpath_conf=".conf",
             auth_appid=None,
             auth_clientsecret=None,
-            #prompt_needed=False,
-            #prompt_all=False,
-            #collection_level=0,
+            #prompt_needed=False, # TODO: Add support for this option
+            #prompt_all=False, # TODO: Add support for this option
+            #collection_level=0, # TODO: Add support for this option
             config_tenant=None,
             config_gcc=False,
             config_gcc_high=False,
             config_subscriptionid="All",
             filters_date_start=None,
             filters_date_end=None,
+            variable_ual_operations="Add application.,Add owner to application.,Add owner to service principal.,Add owner to group.,Add application.,Add service principal.,Add app role assignment to service principal.,Add app role assignment grant to user.,Add app role assignment to group.,Add delegated permission grant.,Add app role assignment grant to user., Add app role assignment to group., Add app role assignment to service principal., Add application., Add delegated permission grant., Add device., Add eligible member to role., Add member to group., Add member to role., Add owner to application., Add owner to group., Add owner to service principal., Add policy to service principal., Add policy., Add registered owner to device., Add registered users to device., Add service principal credentials., Add service principal., Add user., Add verified domain., Add-FederatedDomain, Add-MailboxPermission, Add-RoleGroupMember, AddFolderPermissions,Approved or denied an app,CreateAssignment, CreatePowerApp, CreateRole,Consent to Application,ConsentModificationRequest,GetDSIInvestigation,ModifyMailboxPermissions,ModifyFolderPermissions,New-AcceptedDomain, New-App, New-ConditionalAccessPolicy, New-DkimSigningConfigSelectorCnames, New-InboxRule, New-IntraOrganizationConnector, New-MigrationEndpoint, New-OutboundConnector, New-RoleGroup, New-ServicePrincipal, New-TransportRule, Reset user password.,Set-AdminAuditLogConfig,Set-AcceptedDomain, Set-InboundConnector, Set-InboxRule, Set-TransportRule,SensitivityLabelApplied,SensitivityLabelChanged,Update PasswordProfile., Update application ‚- Certificates and secrets management , Update application., Update device configuration., Update device., Update domain., Update group., Update policy., Update service principal., Update user.",
+            variable_ual_userids=None,
+            variable_ual_clientip=None,
             variable_ual_threshold=5000,
             variable_max_ual_tasks=5,
             variable_ual_extra_start=None,
@@ -91,6 +89,9 @@ def genconf(outpath_auth=".auth",
         config_subscriptionid: If you want to check all of your Azure subscriptions, set this to All, otherwise enter your Azure subscription ID. For multiple IDs, separate it with commas, no spaces
         filters_date_start: Format should be YYYY-MM-DD. If not set will default to the earliest date for log retention
         filters_date_end: Format should be YYYY-MM-DD. Will default to the present day
+        variable_ual_operations: Comma-separated list of Unified Audit Log operation names to filter UAL pulls. If set, only these operations will be requested from the UAL API.
+        variable_ual_userids: Comma-separated list of user IDs to include in UAL pulls. Example: alice@contoso.com,bob@contoso.com
+        variable_ual_clientip: Comma-separated list of client IP addresses to include in UAL pulls. Example: 203.0.113.45,10.1.2.3
         variable_ual_threshold: Threshold used for ual API requests. Specifies the maximum results pulled per session. Can be between 100 - 50000. The api is optimized to return results faster the larger the threshold, but the whole session has to be repeated if an error occurs as the results are not returned sorted. We recommend 5000 as the threshold, but this can be toggled with
         variable_max_ual_tasks: Maximum number of ual coroutines/tasks to have running asynchronously. Minimum value is 1.
         variable_ual_extra_start: Start date for an extra time frame for ual to search. Reason for this is because ual takes the longest to pull and while you don't want the oldest data to roll off, you may want to look at another timeframe and do not want to wait for ual to get there and pull the logs. Format should be YYY-MM-DD
@@ -114,6 +115,9 @@ def genconf(outpath_auth=".auth",
         d4iot_dict_config: dictionary of config values you want to set. Will only update valid config parameters. e.g. {"d4iot": {"mgmt_alerts": True}}
         new: Overwrite the existing config. Default will not overwrite existing configs, but will update config info if out of date
         insecure: Disable secure authentication handling (file encryption)
+        prompt_needed=False, # TODO: Add support for this option
+        prompt_all=False, # TODO: Add support for this option
+        collection_level=0, # TODO: Add support for this option
         debug: Enable debug logging
     """
     # Grab arguments as a dictionary object

@@ -31,7 +31,7 @@
 - [Acknowledgements](#acknowledgements)
 - [Contributing](#contributing)
 - [License](#license)
-- [Legal Disclaimer](#legal-disclaimer) 
+- [Legal Disclaimer](#legal-disclaimer)
 
 ## About
 
@@ -81,7 +81,7 @@ A cloud-only user account and associated EXO service principal with the followin
 Exchange Online Admin Center
 ```
 - View-Only Audit Logs
-- View-Only Configuration 
+- View-Only Configuration
 - View-Only Recipients
 - User Options
 ```
@@ -162,7 +162,7 @@ To install, clone the repository and then do a pip install:
 ```sh
 git clone https://github.com/cisagov/untitledgoosetool.git
 cd untitledgoosetool
-python3 -m pip install . 
+python3 -m pip install .
 ```
 
 #### Docker
@@ -185,7 +185,7 @@ $ goosey conf
 A version of this command will be generated when the powershell installation script is run to create/setup the service principal. Below is an example with fake parameter values
 
 ```sh
-$ goosey conf --config_tenant=5fd146ad-8b31-4afa-a72f-6f71df5c7173 --config_subscriptionid=all --auth_appid=24fd6377-79e0-445d-838b-3eaa60d3ca21 
+$ goosey conf --config_tenant=5fd146ad-8b31-4afa-a72f-6f71df5c7173 --config_subscriptionid=all --auth_appid=24fd6377-79e0-445d-838b-3eaa60d3ca21
 ```
 
 After this, `.auth`, `.conf`, `.auth_d4iot`, and `.d4iot_conf` files should be placed in your current directory. These files are used by Untitled Goose Tool. Unless this was generated with the above parameters, you should fill out the top section `[auth]` so that Untitled Goose Tool can properly auth to the appropriate resources. However, if you do not feel comfortable about entering your credentials into a file, you can opt to delete the `.auth` and/or `.auth_d4iot` and be prompted by the tool for credentials via console instead.
@@ -238,6 +238,21 @@ ual_extra_start=
 ual_extra_end=
 # Threshold for how many logs to pull per query. Usually want to try to max this out as KQL queries are rate limited.
 mde_threshold=10000
+
+### Unified Audit Log Filters
+
+You can fine-tune which Unified Audit Log (UAL) records are saved by setting UAL filter variables in the `[variables]` section of your `.conf` file. Use the `ual_`-prefixed variables below:
+
+Note: The Operation, UserId, and ClientIP filters cannot be run together. You must start a separate UAL pull for each filter, and you may need to clear the bounds and state files when running duplicate timeframes.
+
+- `ual_operations`: comma-separated list of UAL operation names to request from the `Search-UnifiedAuditLog` API (e.g. `Send On Behalf,FileDeleted,Create`). Do not wrap entries in quotes; internal spaces are preserved.
+- `ual_userids`: comma-separated list of user IDs to include in saved results (e.g. `alice@contoso.com,bob@contoso.com`).
+- `ual_clientip`: comma-separated list of client IP addresses to include in saved results (e.g. `203.0.113.45,10.1.2.3`).
+
+Notes:
+- `ual_operations` values are passed to the API as the `Operations` parameter when present.
+- `ual_userids` and `ual_clientip` are applied client-side (results are filtered after retrieval), so server-side `ResultCount` and threshold logic still reflect the unfiltered API responses.
+- When multiple filter types are set, a record must match all configured filters (logical AND) to be saved.
 # can be either 'table' or 'machine'. 'table' will pull directly from the mde tables without filtering. While 'machine' will filter by 'machine' with large tenants 'machine' will likely be prefered as time bounding on the entire table will likely cause issues.
 mde_query_mode=table
 
@@ -657,7 +672,7 @@ http_proxy=<proxy_url>
 
 5. Excessive amount of 429 errors during `goosey honk`
 
-    **Solution:** Untitled Goose Tool will quickly encounter the Graph API limitations of a tenant; this is a limitation that Microsoft has on Graph API calls. 
+    **Solution:** Untitled Goose Tool will quickly encounter the Graph API limitations of a tenant; this is a limitation that Microsoft has on Graph API calls.
 
 
 ## Acknowledgements

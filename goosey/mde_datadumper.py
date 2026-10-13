@@ -19,17 +19,20 @@ today_date = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
 
 class MDEDataDumper(DataDumper):
 
-    def __init__(self, output_dir, reports_dir, app_auth, app_auth2, session, config, debug):
+    def __init__(self, output_dir, reports_dir, app_auth, app_auth2, app_auth3, app_auth4, session, config, debug):
         super().__init__(f'{output_dir}{os.path.sep}mde', reports_dir, app_auth, session, debug)
         self.app_auth2 = app_auth2
+        self.app_auth3 = app_auth3
+        self.app_auth4 = app_auth4
         self.failurefile = os.path.join(reports_dir, '_no_results.json')
         self.logger = setup_logger(__name__, debug)
         self.gcc = config_get(config, 'config', 'gcc', self.logger).lower() == "true"
         self.gcc_high = config_get(config, 'config', 'gcc_high', self.logger).lower() == "true"
-        endpoints = get_endpoints(gcc=self.gcc, gcc_high=self.gcc_high)
-        self.mde_url = endpoints["securitycenter_api"] + "/"
-        self.identity_url = endpoints["security_api"]
+        self.endpoints = get_endpoints(gcc=self.gcc, gcc_high=self.gcc_high)
+        self.mde_url = self.endpoints["securitycenter_api"] + "/"
+        self.identity_url = self.endpoints["security_api"]
         self.call_object = [self.mde_url, self.app_auth, self.logger, self.output_dir, self.get_session()]
+        self.graph_call_object = [self.endpoints["graph_api"] + "/v1.0/", self.app_auth3, self.logger, self.output_dir, self.get_session()]
         self.mde_THRESHOLD = int(config_get(config, 'variables', 'mde_threshold'))
         self.mde_query_mode = config_get(config, 'variables', 'mde_query_mode')
         filters = config_get(config, 'filters', 'date_start', logger=self.logger)
@@ -100,6 +103,110 @@ class MDEDataDumper(DataDumper):
         """
         await helper_single_object("api/recommendations", self.call_object, self.failurefile)
 
+    async def dump_incidents(self) -> None:
+        """Dump microsoft defender incidents
+        https://learn.microsoft.com/en-us/graph/api/security-list-incidents
+        """
+        await helper_single_object("security/incidents?$expand=alerts", self.graph_call_object, self.failurefile)
+
+    async def dump_cloudappactivity(self) -> None:
+        """Dump microsoft defender for cloud app activity
+        https://learn.microsoft.com/en-us/defender-cloud-apps/api-activities-list
+        """
+        caa_output_dir = os.path.join(self.output_dir, "cloud_app_activity")
+        statefile = os.path.join(caa_output_dir, ".caa_savestate")
+        check_output_dir(caa_output_dir, self.logger)
+        app_auth = self.app_auth4
+        err = None
+        header = {
+            'Authorization': '%s %s' % (app_auth['token_type'], app_auth['access_token']),
+            'Content-Type': 'application/json'
+        }
+        url = self.endpoints["cloudapp_defender"] + "/api/v1/archived_activities/"
+        unique_ids = set()
+
+        # default end time. Now
+        default_end = utc.localize(datetime.now())
+
+        # defult start tiem
+        default_start = (default_end - timedelta(days=364))
+
+        if self.date_range:
+            default_start = utc.localize(datetime.strptime(self.date_start,"%Y-%m-%d"))
+            default_end = utc.localize(datetime.strptime(self.date_end,"%Y-%m-%d"))
+
+        saved_end = load_state(statefile)
+        if saved_end:
+            default_start = saved_end
+        # Filters need to be in epoch time
+        start = default_start.timestamp() * 1000
+        last_date = start
+        end = default_end.timestamp() * 1000
+        self.logger.debug(f"Dumping cloud app activity logs from {default_start} to {default_end}")
+        # Total Count is not accurate. Changes on each pull. Is more of an estimate
+        tries = 0
+        retries = 3
+        while last_date < end and tries < retries and err == None:
+            total_count = 0
+            skip = 0
+            has_data = True
+            start = last_date
+            while has_data and tries < retries:
+                data = json.dumps({"skip": skip, "sortField": "date", "sortDirection": "asc", "filters": {"date": {"range": [{"start": start, "end": end}]}}})
+                async with self.ahsession.request("POST", url=url, headers=header, data=data) as r:
+                    result = await r.json()
+                    if r.status == 401:
+                        self.logger.error("Detected 401 unauthorized, exiting.")
+                        sys.exit(1)
+                    elif r.status == 403:
+                        err = "Insufficient role based permissions"
+                        self.logger.error(err)
+                        return err
+                    elif r.status == 429:
+                        error = result['error']
+                        message = error['message']
+                        seconds = message.split(' ')[-2]
+                        self.logger.debug("Sleeping for %s seconds" % (seconds))
+                        await asyncio.sleep(int(seconds))
+                        err = message
+                        tries += 1
+                        result = None
+                    elif r.status == 200:
+                        tries = 0
+                        has_data = result["hasNext"]
+                        skip += len(result["data"])
+                        total_count = max(total_count, result["total"])
+                        first_date = 0
+                        if len(result["data"]) > 0:
+                            first_date = result["data"][0]["timestamp"]
+                            last_date = result["data"][0]["timestamp"]
+                        for log in result["data"]:
+                            if log["timestamp"] < first_date:
+                                first_date = log["timestamp"]
+                            if log["timestamp"] > last_date:
+                                last_date = log["timestamp"]
+                            unique_ids.add(log["_id"])
+                        self.logger.debug(f"Total pulled {skip}/{total_count}")
+                        #self.logger.debug(f"Unique Count {len(unique_ids)}")
+                        output_file = os.path.join(caa_output_dir, f"cloudappactivity_{first_date}-{last_date}.json")
+                        with open(output_file, 'a', encoding='utf-8') as f:
+                            for x in result["data"]:
+                                f.write(json.dumps(x) + '\n')
+                        if len(result["data"]) > 0:
+                            last_date += 1000
+                            save_state(statefile, datetime.fromtimestamp(last_date/1000))
+                    else:
+                        print(r.status)
+                        if "error" in result:
+                            err = result["error"]["message"]
+                            self.logger.error(err)
+                        else:
+                            print(type(result))
+                            self.logger.debug(result)
+            if total_count == 0:
+                break
+        if tries >= retries:
+            return err
 
     async def check_machines(self):
         check_app_auth_token(self.app_auth, self.logger)
@@ -116,26 +223,26 @@ class MDEDataDumper(DataDumper):
                     data.append(json.loads(line))
         return data
 
-    async def dump_advanced_hunting_alerts_incidents(self) -> None:
-        """Dumps the results from incidents and alerts.
-        API Reference: https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/run-advanced-query-api?view=o365-worldwide
+    async def _dump_mde_tables_helper(self, tables=[]) -> None:
+        """
+        Helper Function for dumping mde tables
         """
 
         # default end time. Now
-        end = utc.localize(datetime.now())
+        default_end = utc.localize(datetime.now())
 
         # defult start tiem
-        start = end - timedelta(days=364)
+        default_start = default_end - timedelta(days=364)
 
         if self.date_range:
             self.logger.debug(f'MDE Dump using specified date range: {self.date_start} to {self.date_end}')
-            start = utc.localize(datetime.strptime(self.date_start,"%Y-%m-%d"))
-            end = utc.localize(datetime.strptime(self.date_end,"%Y-%m-%d"))
-
-        tables = ['AlertInfo', 'AlertEvidence']
+            default_start = utc.localize(datetime.strptime(self.date_start,"%Y-%m-%d"))
+            default_end = utc.localize(datetime.strptime(self.date_end,"%Y-%m-%d"))
 
         tasks = []
         for table in tables:
+            start = default_start
+            end = default_end
             # Set the output directory for the mde table logs
             mde_log_dir = os.path.join(self.output_dir, table)
             base_query = table
@@ -143,109 +250,70 @@ class MDEDataDumper(DataDumper):
             check_output_dir(mde_log_dir, self.logger)
 
             statefile = os.path.join(mde_log_dir, f".{table}.savestate")
-            outfile = os.path.join(mde_log_dir, f"{table}.json")
+            outfile_start = os.path.join(mde_log_dir, f"{table}_")
             saved_end = load_state(statefile)
             if saved_end:
                 start = max(saved_end, start)
             # Use asyncio to use asyncronous coroutines to help ensure we get data before it rolls off
             self.logger.debug(f"Generating table dump task for table: {table}, start: {start}, end: {end}")
             caller_name = asyncio.current_task().get_name()
-            tasks.append(asyncio.create_task(self._dump_table(base_query, start, end, path="api/advancedhunting/run", statefile=statefile, outfile=outfile),name=f"{caller_name}_{table}"))
+            tasks.append(asyncio.create_task(self._dump_table(base_query, start, end, statefile=statefile, outfile_start=outfile_start), name=f"{caller_name}_{table}"))
 
         await asyncio.gather(*tasks)
 
-    async def dump_advanced_hunting_query(self) -> None:
-        """Dumps the results from advanced hunting queries.
-        API Reference: https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/run-advanced-query-api?view=o365-worldwide
+    async def dump_advanced_hunting_alerts(self) -> None:
+        """Dumps the results from alerts and alert evidence tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
         """
-        # Generate a map of machine ids/names
-        data = await self.check_machines()
-        machine_ids = list(findkeys(data, 'id'))
-        machine_names = list(findkeys(data, 'computerDnsName'))
-        mapOfIds = dict(zip(machine_ids, machine_names))
 
-        # default end time. Now
-        end = utc.localize(datetime.now())
+        tables = ['AlertInfo', 'AlertEvidence']
+        await self._dump_mde_tables_helper(tables=tables)
 
-        # defult start tiem
-        start = end - timedelta(days=364)
-
-        if self.date_range:
-            self.logger.debug(f'MDE Dump using specified date range: {self.date_start} to {self.date_end}')
-            start = utc.localize(datetime.strptime(self.date_start,"%Y-%m-%d"))
-            end = utc.localize(datetime.strptime(self.date_end,"%Y-%m-%d"))
-
-        tables = ['DeviceEvents', 'DeviceLogonEvents', 'DeviceRegistryEvents', 'DeviceProcessEvents', 'DeviceNetworkEvents', 'DeviceFileEvents', 'DeviceImageLoadEvents']
-
-        # default to mode table
-        machine_mode = False
-        machine_table_list = itertools.product([""], tables)
-        if self.mde_query_mode == "machine":
-            machine_mode = True
-            machine_table_list = list(itertools.product(machine_ids, tables))
-
-        tasks = []
-        for machine_id, table in machine_table_list:
-            # Set the output directory for the mde table logs
-            mde_log_dir = os.path.join(self.output_dir, table)
-            machine_name = str(mapOfIds.get(machine_id, ""))
-            base_query = table
-            if machine_mode:
-                base_query = f"{table} | where DeviceId=='{machine_id}'"
-                mde_log_dir = os.path.join(self.output_dir, machine_name)
-            check_output_dir(mde_log_dir, self.logger)
-
-            statefile = os.path.join(mde_log_dir, f".{table}_{machine_id}.savestate")
-            outfile = os.path.join(mde_log_dir, f"{table}_{machine_id}.json")
-            saved_end = load_state(statefile)
-            if saved_end:
-                start = max(saved_end, start)
-            # Use asyncio to use asyncronous coroutines to help ensure we get data before it rolls off
-            self.logger.debug(f"Generating table dump task for table: {table}, machine: {machine_name}, start: {start}, end: {end}")
-            caller_name = asyncio.current_task().get_name()
-            tasks.append(asyncio.create_task(self._dump_table(base_query, start, end, path="api/advancedqueries/run", statefile=statefile, outfile=outfile), name=f"{caller_name}_{table}"))
-        await asyncio.gather(*tasks)
-
-    async def dump_advanced_identity_hunting_query(self) -> None:
-        """Dumps the results from advanced hunting API queries.
-        API Reference: https://learn.microsoft.com/en-us/microsoft-365/security/defender/api-advanced-hunting?view=o365-worldwide
+    async def dump_advanced_hunting_devices(self) -> None:
+        """Dumps the results from microsoft defender for endpoint tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
         """
-        check_app_auth_token(self.app_auth2, self.logger)
 
-        # default end time. Now
-        end = utc.localize(datetime.now())
+        tables = ['DeviceEvents', 'DeviceFileCertificateInfo', 'DeviceLogonEvents', 'DeviceRegistryEvents', 'DeviceProcessEvents', 'DeviceNetworkEvents', 'DeviceFileEvents', 'DeviceImageLoadEvents', 'DeviceInfo', 'DeviceNetworkInfo']
+        await self._dump_mde_tables_helper(tables=tables)
 
-        # defult start tiem
-        start = end - timedelta(days=364)
+    async def dump_advanced_hunting_identity(self) -> None:
+        """Dumps the results from microsoft defender for identity tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
+        """
 
-        if self.date_range:
-            self.logger.debug(f'MDE Dump using specified date range: {self.date_start} to {self.date_end}')
-            start = utc.localize(datetime.strptime(self.date_start,"%Y-%m-%d"))
-            end = utc.localize(datetime.strptime(self.date_end,"%Y-%m-%d"))
+        tables = ['IdentityDirectoryEvents', 'IdentityLogonEvents', 'IdentityQueryEvents', 'IdentityInfo', 'AADSignInEventsBeta', 'AADSpnSignInEventsBeta']
+        await self._dump_mde_tables_helper(tables=tables)
 
-        id_tables = ['IdentityDirectoryEvents', 'IdentityLogonEvents', 'IdentityQueryEvents']
+    async def dump_advanced_hunting_cloud_apps(self) -> None:
+        """Dumps the results from microsoft defender for cloud apps tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
+        """
+        tables = ['CloudAppEvents', 'CloudAuditEvents', 'CloudProcessEvents', 'BehaviorEntities', 'BehaviorInfo']
+        await self._dump_mde_tables_helper(tables=tables)
 
-        tasks = []
-        for table in id_tables:
-            # Set the output directory for the mde table logs
-            mde_log_dir = os.path.join(self.output_dir, table)
-            base_query = table
+    async def dump_advanced_hunting_email_url(self) -> None:
+        """Dumps the results from microsoft xdr email and url click event tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
+        """
+        tables = ['EmailAttachmentInfo', 'EmailEvents', 'EmailPostDeliveryEvents', 'EmailUrlInfo', 'UrlClickEvents']
+        await self._dump_mde_tables_helper(tables=tables)
 
-            check_output_dir(mde_log_dir, self.logger)
+    async def dump_advanced_vulnerability_management(self) -> None:
+        """Dumps the results from microsoft defender vulnerability management tables.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
+        """
+        tables = ['DeviceBaselineComplianceAssessment', 'DeviceBaselineComplianceAssessmentKB', 'DeviceBaselineComplianceProfiles', 'DeviceTvmBrowserExtensions', 'DeviceTvmBrowserExtensionsKB', 'DeviceTvmCertificateInfo', 'DeviceTvmHardwareFirmware', 'DeviceTvmInfoGathering', 'DeviceTvmInfoGatheringKB', 'DeviceTvmSecureConfigurationAssessment', 'DeviceTvmSecureConfigurationAssessmentKB', 'DeviceTvmSoftwareEvidenceBeta', 'DeviceTvmSoftwareInventory', 'DeviceTvmSoftwareVulnerabilities', 'DeviceTvmSoftwareVulnerabilitiesKB']
+        await self._dump_mde_tables_helper(tables=tables)
 
-            statefile = os.path.join(mde_log_dir, f".{table}.savestate")
-            outfile = os.path.join(mde_log_dir, f"{table}.json")
-            saved_end = load_state(statefile)
-            if saved_end:
-                start = max(saved_end, start)
-            # Use asyncio to use asyncronous coroutines to help ensure we get data before it rolls off
-            self.logger.debug(f"Generating table dump task for table: {table}, start: {start}, end: {end}")
-            caller_name = asyncio.current_task().get_name()
-            tasks.append(asyncio.create_task(self._dump_table(base_query, start, end, path="api/advancedhunting/run", statefile=statefile, outfile=outfile),name=f"{caller_name}_{table}"))
+    async def dump_advanced_hunting_exposure(self) -> None:
+        """Dumps the results from microsoft security exposure management.
+        API Reference: https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables
+        """
+        tables = ['ExposureGraphEdges', 'ExposureGraphNodes']
+        await self._dump_mde_tables_helper(tables=tables)
 
-        await asyncio.gather(*tasks)
-
-    async def run_mde_query(self, query, start, end, bounds, path='api/advancedqueries/run', summarize=False):
+    async def run_mde_query(self, query, start, end, bounds, summarize=False):
         """
         Run an advanced query or hunt and return the result
         """
@@ -255,15 +323,14 @@ class MDEDataDumper(DataDumper):
         # errors from the query that will cause the dumper to cut the tim in half
         slice_errors = ['exceeded the allowed limits', 'exceeded the allowed result size']
 
-        app_auth = self.app_auth
-        if path == "api/advancedhunting/run":
-            app_auth = self.app_auth2
+        app_auth = self.app_auth3
         header = {
             'Authorization': '%s %s' % (app_auth['token_type'], app_auth['access_token']),
             'Content-Type': 'application/json'
         }
         # Apply time filters
         full_query = query
+
         if start and not end:
             full_query += f"|where Timestamp > datetime({start})"
         elif end and not start:
@@ -280,10 +347,12 @@ class MDEDataDumper(DataDumper):
         splits = full_query.split('|where Timestamp')
         result = None
         err = None
-        url = self.mde_url + path
+        url = self.endpoints["graph_api"] + "/v1.0/security/runHuntingQuery"
         try:
             async with self.ahsession.request("POST", url=url, headers=header, data=data) as r:
                 result = await r.json()
+                #self.logger.debug(r.status)
+                #self.logger.debug(result)
                 if r.status == 401:
                     self.logger.error("Detected 401 unauthorized, exiting.")
                     sys.exit(1)
@@ -298,8 +367,8 @@ class MDEDataDumper(DataDumper):
                 else:
                     if "error" in result:
                         err = result["error"]["message"]
-                    if "Results" in result:
-                        result = result["Results"]
+                    if "results" in result:
+                        result = result["results"]
                     else:
                         result = None
 
@@ -380,7 +449,7 @@ class MDEDataDumper(DataDumper):
 
 
 
-    async def _dump_table(self, base_query, start, end, path, statefile, outfile, retries=3):
+    async def _dump_table(self, base_query, start, end, statefile, outfile_start, retries=3):
         """
         Description:
             Query the mde table and pull logs for the timeframe
@@ -389,9 +458,9 @@ class MDEDataDumper(DataDumper):
             base_query: what to start with for the query
             start: starting timestamp
             end: ending timestamp
-            path: path to the endpoint for the queries
-            output_dir: where to place the logs
-            machine_id: Optional id of a mahcine to filter down the query
+            stattefile: Path to the statefile
+            outfile_start: where to place the logs
+            retries: number of retries to attempt when there's an error
         """
         totalResultCount = 0
         totalResultEnd = start
@@ -411,7 +480,7 @@ class MDEDataDumper(DataDumper):
         summary = None
         while start < finalEnd and tries < retries*2:
             # Narrow down until we have a valid timeframe
-            summary, err, new_end, bounds = await self.run_mde_query(base_query, start, end, bounds, path=path, summarize=True)
+            summary, err, new_end, bounds = await self.run_mde_query(base_query, start, end, bounds, summarize=True)
             # If there are no results then we want to get to a timeframe that does contain results
             if err:
                 tries += 1
@@ -447,7 +516,7 @@ class MDEDataDumper(DataDumper):
             # Run a search to get a summary of the timeframe. Faster and provides more info
             if bounds[0]["count"] == None or \
                (bounds[0]["count"] >= self.mde_THRESHOLD and end <= bounds[0]["end"]):
-                summary, err, end, bounds = await self.run_mde_query(base_query, start, end, bounds, path=path, summarize=True)
+                summary, err, end, bounds = await self.run_mde_query(base_query, start, end, bounds,  summarize=True)
                 if err:
                     tries += 1
                     continue
@@ -459,16 +528,17 @@ class MDEDataDumper(DataDumper):
                     start = bounds[0]["start"]
                     continue
 
-            results, err, end, bounds = await self.run_mde_query(base_query, start, end, bounds, path=path)
+            results, err, end, bounds = await self.run_mde_query(base_query, start, end, bounds)
             if err:
                 tries += 1
                 continue
             if len(results) >= 0:
                 if start >= totalResultEnd:
                     totalResultCount += len(results)
-                #self.logger.debug('Size of table: %s' % len(results))
+                self.logger.debug('Size of table: %s' % len(results))
                 #self.logger.debug('Size of table: %s' % result['Stats']['dataset_statistics'][0]['table_row_count'])
-                with open(outfile, 'a', encoding='utf-8') as f:
+                session_filename = outfile_start + f"{startDate}_{endDate}.json".replace(":", "_")
+                with open(session_filename, 'a', encoding='utf-8') as f:
                     for x in results:
                         f.write(json.dumps(x) + '\n')
 
@@ -484,4 +554,3 @@ class MDEDataDumper(DataDumper):
                 totalSavedResults += len(results)
                 self.logger.debug(f"Total results {totalSavedResults}/{totalResultCount}")
                 continue
-

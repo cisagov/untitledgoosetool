@@ -17,3 +17,5 @@ error.log
 *.auth*
 *_auth*
 *.conf
+venv/
+node_modules/

@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - AutoHonk - 2026-09-01
+### Added
+- Better task naming for logging.
+- Microsoft Graph role `ThreatHunting.Read.All`.
+- Log Analytics API role `Data.Read`.
+- Support for dumping Log Analytics Workspace data.
+- More documentation.
+- `autohonk` for automated authentication.
+- Additional configuration options for UAL task tuning and optional extra time fields.
+- Unified Audit Log filter variables in the `[variables]` section of `.conf`:
+  - `ual_operations` for filtering UAL requests by operation name.
+  - `ual_userids` for filtering saved UAL results by user ID.
+  - `ual_clientip` for filtering saved UAL results by client IP address.
+
+### Changed
+- Updated required package versions.
+- Updated `Create_SP.ps1` to streamline setup by:
+  - removing the Cloud Shell prompt,
+  - adding GCC High support,
+  - reusing an existing role group with the app name when present.
+- `goosey conf` now prompts for the client secret instead of requiring it as an argument.
+- Renamed `azuread` references to `entraid`.
+- Removed version and author metadata from files.
+- Improved UAL pulling efficiency.
+- Unified Audit Log collection now supports configurable filtering behavior through `.conf`.
+- `ual_operations` is passed to the `Search-UnifiedAuditLog` API as the `Operations` parameter when set.
+- `ual_userids` and `ual_clientip` are applied client-side after retrieval.
+- When multiple UAL filters are configured, records must match all configured filters to be saved.
+- MDE query mode supports `table` or `machine` collection strategies for large tenant performance tuning.
+- Improved async handling for Azure dumpers.
+- Improved logging for Python 3.12 and updated the Docker image.
+- Better support for GCC and GCC High.
+
+### Fixed
+- Fixed errors in `Create_SP.ps1`.
+- Resolved `goosey honk` dumper argument issues such as `--entraid`.
+- Fixed issues in D4IoT dumpers.
+- Fixed configuration collection issues, especially for security contacts.
+- Fixed endless pulling for sign-in logs when `endtime` was not specified.
+- Fixed async issues in Azure dumpers.
+- Fixed missing save state for Azure Activity Log.
+
+### Notes
+- `ual_operations`, `ual_userids`, and `ual_clientip` may require separate UAL pulls depending on the collection goal.
+- Running duplicate UAL timeframes with different filters may require clearing saved bounds and state files before rerunning.
+- Because `ual_userids` and `ual_clientip` are applied after retrieval, API-side result counts and threshold behavior still reflect the full unfiltered response.
+
 ## [2.1.0] - Enter the honk - 2024-02-19
 ### Added
 - Added support for python 3.13
@@ -29,7 +76,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Resolved issue with dumper cmd arguments for honk command not working (e.g. goosey honk --entraid)
-- Issue identified in d4iot dumpers 
+- Issue identified in d4iot dumpers
 
 ## [2.0.2] - Enter the honk - 2024-08-21
 ### Added
@@ -51,7 +98,7 @@ All notable changes to this project will be documented in this file.
 - Removed version and author information from every file
 
 ### Fixed
-- Endless pulling issue for sign in logs when endtime wasn't specified 
+- Endless pulling issue for sign in logs when endtime wasn't specified
 
 ## [2.0.0] - Enter the honk - 2024-05-08
 ### Added
@@ -132,7 +179,7 @@ All notable changes to this project will be documented in this file.
 ## [1.2.2] - The goose is loose - 2023-07-17
 ### Added
 - Better catches for when password for the account needs to be updated, when a conditional access policy blocks user account access, or when the user account is flagged for risky actions.
-- Added catch for empty `.conf` fields, will allow more graceful exiting. 
+- Added catch for empty `.conf` fields, will allow more graceful exiting.
 
 ### Changed
 - Updated and pinned `aiohttp`, `colored`, `cryptography`, and `selenium` dependencies and updated Python version to 3.10.11.
